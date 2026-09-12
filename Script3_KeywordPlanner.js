@@ -133,10 +133,17 @@ function agruparPorIdioma_(candidatas, yaConsultadas) {
 function generarAccessTokenAds_() {
   const props = PropertiesService.getScriptProperties();
   const email = props.getProperty('ADS_SERVICE_ACCOUNT_EMAIL');
-  const privateKey = props.getProperty('ADS_SERVICE_ACCOUNT_PRIVATE_KEY');
-  if (!email || !privateKey) {
+  const privateKeyRaw = props.getProperty('ADS_SERVICE_ACCOUNT_PRIVATE_KEY');
+  if (!email || !privateKeyRaw) {
     throw new Error('Faltan ADS_SERVICE_ACCOUNT_EMAIL / ADS_SERVICE_ACCOUNT_PRIVATE_KEY en Script Properties.');
   }
+  // FIX 12/09/2026: al pegar la clave en Script Properties (un campo de
+  // texto de una sola línea en el editor), los saltos de línea reales del
+  // PEM se pierden y quedan como el texto literal "\n" (dos caracteres) —
+  // eso rompe computeRsaSha256Signature con "Invalid argument: key".
+  // Normalizamos cualquier "\n" literal a salto de línea real, funcione
+  // como funcione que se haya pegado.
+  const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
 
   const ahora = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT' };
