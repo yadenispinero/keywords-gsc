@@ -44,13 +44,23 @@ const COLUMNAS_BANCO = [
  */
 function publicarPriorizadasEnBancoDeContenido() {
   const temasNuevos = agregarPriorizadasAlBanco_();
+  if (temasNuevos.length === 0) {
+    Logger.log('Sin novedades: ninguna pregunta en Estado "Priorizada" que no estuviera ya en el banco.');
+  } else {
+    Logger.log('Agregadas ' + temasNuevos.length + ' fila(s) nueva(s) a "' + CONFIG_BANCO.HOJA_BANCO + '":');
+    temasNuevos.forEach(t => Logger.log('  - ' + t));
+  }
   enviarResumenPorCorreo_(temasNuevos);
+  Logger.log('Correo resumen enviado a ' + CONFIG_BANCO.EMAIL_RESUMEN + '.');
 }
 
 function agregarPriorizadasAlBanco_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const preguntas = ss.getSheetByName(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
-  if (!preguntas || preguntas.getLastRow() < 2) return [];
+  if (!preguntas || preguntas.getLastRow() < 2) {
+    Logger.log('La pestaña "' + CONFIG_PREGUNTAS.HOJA_PREGUNTAS + '" no existe o está vacía — nada que publicar.');
+    return [];
+  }
 
   const bancoSheet = SpreadsheetApp.openById(CONFIG_BANCO.SPREADSHEET_ID)
     .getSheetByName(CONFIG_BANCO.HOJA_BANCO);
