@@ -30,7 +30,6 @@ const CONFIG_PREGUNTAS = {
   HOJA_PREGUNTAS: 'Preguntas',
   PAUSA_ENTRE_LLAMADAS_MS: 200,
   MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA: 15, // tope por cada combinación semilla+idioma (ej. "Odoo"+EN)
-  MESES_TRIMESTRE: [1, 4, 7, 10], // el trigger es mensual; solo se ejecuta de verdad en estos meses
   IDIOMAS: [
     {
       codigo: 'DE', hl: 'de', gl: 'de',
@@ -58,15 +57,6 @@ const CONFIG_PREGUNTAS = {
  * "Pendiente", etiquetadas con idioma y localización.
  */
 function investigarPreguntasAutocomplete() {
-  // El trigger que dispara esta función es mensual (Apps Script no ofrece
-  // "trimestral" nativo) — este chequeo hace que el trabajo real solo
-  // corra en enero/abril/julio/octubre, los demás meses no hace nada.
-  const mesActual = new Date().getMonth() + 1; // 1-12
-  if (CONFIG_PREGUNTAS.MESES_TRIMESTRE.indexOf(mesActual) === -1) {
-    Logger.log('Mes ' + mesActual + ': no es mes de trimestre (' + CONFIG_PREGUNTAS.MESES_TRIMESTRE.join(',') + '), no se ejecuta esta vez.');
-    return;
-  }
-
   const semillas = leerSemillas_();
   if (semillas.length === 0) {
     Logger.log('No hay términos semilla en la pestaña "' + CONFIG_PREGUNTAS.HOJA_SEMILLAS + '".');
