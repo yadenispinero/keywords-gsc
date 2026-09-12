@@ -116,12 +116,25 @@ function escribirPestañaDelDia_(priorizadas, fechaStr) {
   sheet.appendRow(['Query', 'Clicks', 'Impresiones', 'CTR', 'Posición', 'Categoría']);
   if (priorizadas.length > 0) {
     const valores = priorizadas.map(r => [
-      r.query, r.clicks, r.impressions, (r.ctr * 100).toFixed(2) + '%', r.position.toFixed(1), r.categoria
+      r.query, r.clicks, r.impressions, (r.ctr * 100).toFixed(2) + '%', redondearPosicion_(r.position), r.categoria
     ]);
     sheet.getRange(2, 1, valores.length, 6).setValues(valores);
+    sheet.getRange(2, 5, valores.length, 1).setNumberFormat('0.0');
   }
   sheet.getRange(1, 1, 1, 6).setFontWeight('bold');
   sheet.autoResizeColumns(1, 6);
+}
+
+/**
+ * FIX 12/09/2026: la posición se escribía como texto ("2.2", "9.9"...) y
+ * en una Hoja con configuración regional alemana (fechas día.mes), Sheets
+ * autoconvertía esos textos en fechas (ej. "2.2" → 2 de febrero) — solo
+ * se salvaban los que no forman una fecha válida (ej. "52.6", mes 52 no
+ * existe). Escribir un número real + forzar formato '0.0' evita que
+ * Sheets vuelva a adivinar el tipo de dato.
+ */
+function redondearPosicion_(position) {
+  return Math.round(position * 10) / 10;
 }
 
 /**
@@ -142,16 +155,18 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
     const fila = keywordsExistentes.indexOf(r.query);
     const ctrTexto = (r.ctr * 100).toFixed(2) + '%';
     if (fila === -1) {
+      const filaNueva = sheet.getLastRow() + 1;
       sheet.appendRow([
-        r.query, r.categoria, r.impressions, ctrTexto, r.position.toFixed(1),
+        r.query, r.categoria, r.impressions, ctrTexto, redondearPosicion_(r.position),
         'Pendiente', '', fechaStr, fechaStr
       ]);
+      sheet.getRange(filaNueva, 5).setNumberFormat('0.0');
     } else {
       const filaSheet = fila + 2;
       sheet.getRange(filaSheet, 2).setValue(r.categoria);
       sheet.getRange(filaSheet, 3).setValue(r.impressions);
       sheet.getRange(filaSheet, 4).setValue(ctrTexto);
-      sheet.getRange(filaSheet, 5).setValue(r.position.toFixed(1));
+      sheet.getRange(filaSheet, 5).setNumberFormat('0.0').setValue(redondearPosicion_(r.position));
       sheet.getRange(filaSheet, 9).setValue(fechaStr);
     }
   });
