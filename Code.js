@@ -142,11 +142,15 @@ function redondearPosicion_(position) {
  * Columnas de Seguimiento (reordenado 12/09/2026 a pedido de Yadenis):
  * Keyword | Categoría | Impresiones | CTR | Posición | Acción propuesta
  * (fórmula, columna F) | Fecha detectada | Última actualización | Estado |
- * Notas. Acción propuesta es una fórmula que lee la Categoría de la misma
- * fila — se recalcula sola, el script nunca la toca. Estado y Notas son
- * 100% manuales (dropdown de Estado validado contra la pestaña "Data"):
- * si la keyword ya existe, solo se refrescan las columnas de datos de GSC
- * (Categoría, Impresiones, CTR, Posición, Última actualización).
+ * Notas (fórmula, columna J). Acción propuesta y Notas son fórmulas que
+ * se recalculan solas — el script nunca las toca en filas existentes.
+ * Notas arranca con la Description de esa Acción propuesta (VLOOKUP
+ * contra Data!A:B); si Yadenis escribe texto a mano encima, esa celda
+ * puntual deja de ser fórmula y queda su nota manual — el resto sigue
+ * actualizándose solo. Estado sí es 100% manual (dropdown validado
+ * contra Data!A). Si la keyword ya existe, solo se refrescan las
+ * columnas de datos de GSC (Categoría, Impresiones, CTR, Posición,
+ * Última actualización).
  */
 function actualizarSeguimiento_(priorizadas, fechaStr) {
   const sheet = obtenerOCrearHojaSeguimiento_();
@@ -161,7 +165,7 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
       const filaNueva = sheet.getLastRow() + 1;
       sheet.getRange(filaNueva, 1, 1, 10).setValues([[
         r.query, r.categoria, r.impressions, r.ctr, redondearPosicion_(r.position),
-        formulaAccionPropuesta_(filaNueva), fechaStr, fechaStr, 'Pendiente', ''
+        formulaAccionPropuesta_(filaNueva), fechaStr, fechaStr, 'Pendiente', formulaNotas_(filaNueva)
       ]]);
       sheet.getRange(filaNueva, 4).setNumberFormat('0.00%');
       sheet.getRange(filaNueva, 5).setNumberFormat('0.0');
@@ -210,6 +214,16 @@ function formulaAccionPropuesta_(fila) {
     + 'AND(E' + f + '>=Data!$E$6;C' + f + '<=Data!$I$6);Data!$J$6;'
     + 'TRUE;""'
     + ');"")';
+}
+
+/**
+ * Fórmula de "Notas": carga sola la Description de Data!A:B que
+ * corresponde a la Acción propuesta (columna F) de la misma fila — mismo
+ * vocabulario controlado que el dropdown de Estado, sin duplicar texto.
+ * Separador ";" por el locale alemán de la Hoja (ver formulaAccionPropuesta_).
+ */
+function formulaNotas_(fila) {
+  return '=IFERROR(VLOOKUP(F' + fila + ';Data!A:B;2;FALSE);"")';
 }
 
 /**
