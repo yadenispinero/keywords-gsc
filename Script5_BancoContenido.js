@@ -14,28 +14,33 @@
  * Estrategia de marketing / Espacios / Canales) — si cambian esos
  * catálogos, actualizar aquí a mano.
  *
- * El resto de columnas (Contenido base, Enfoque, Tono, Público, etc.)
- * quedan vacías a propósito — es trabajo editorial de Yadenis, no algo
- * que se pueda derivar de una keyword automáticamente.
+ * FIX 12/09/2026: "Consultoria" cambia de estructura seguido (Yadenis le
+ * agrega/reordena columnas — Tipo de publicación, Idioma, Link text
+ * fuente, etc.). Antes este script escribía por POSICIÓN fija
+ * (COLUMNAS_BANCO, un array de 18 columnas) — cualquier reordenamiento
+ * desalineaba los valores en columnas equivocadas sin avisar. Ahora
+ * ubica cada columna por su ENCABEZADO en vivo, así sobrevive a
+ * reordenamientos futuros sin tocar este código.
+ *
+ * El resto de columnas (Contenido base, Enfoque, Tono, etc.) quedan
+ * vacías a propósito — es trabajo editorial de Yadenis, o se busca en
+ * vivo desde Nomencladores por el generador (no se duplica aquí).
  */
 const CONFIG_BANCO = {
   SPREADSHEET_ID: '1vFLUuk3X0p_ldBnSuD1gs0zjTFaw6xPIidMcWXW8cJ0', // "Plan Promocion"
   HOJA_BANCO: 'Consultoria',
 
-  ESTRATEGIA_DEFAULT: '02. Contenidos TOFU',
-  ESPACIO_DEFAULT: 'Página Web merchise: Blog',
-  CANALES_DEFAULT: 'Linkedin Yfokus.de',
+  // Encabezado → valor por defecto para las columnas que sí rellenamos
+  // al crear una fila nueva. Cualquier columna de "Consultoria" que no
+  // aparezca aquí (ni sea "Tema") queda vacía.
+  VALORES_POR_DEFECTO: {
+    'Estrategia': '02. Contenidos TOFU',
+    'Espacio': 'Página Web merchise: Blog',
+    'Canales': 'Linkedin Yfokus.de'
+  },
 
   EMAIL_RESUMEN: 'yadenis@yfokus.de'
 };
-
-// Orden real de columnas en "Consultoria" — 18 columnas.
-const COLUMNAS_BANCO = [
-  'Estrategia', 'Tema', 'Contenido base', 'Espacio', 'Canales',
-  'Ideas Desarrollo', 'PRODUCTO', 'Enfoque', 'Tono', 'POST',
-  'TIPO HISTORIA', 'Público', 'FechaHora publicacion',
-  'Link Canal Linkedin', 'Link Material Web', 'Link Media', 'Estado', 'Error'
-];
 
 /**
  * Función principal: agrega al banco de contenido las preguntas nuevas
@@ -68,10 +73,17 @@ function agregarPriorizadasAlBanco_() {
     throw new Error('No se encontró la pestaña "' + CONFIG_BANCO.HOJA_BANCO + '" en el banco de contenido.');
   }
 
+  const headers = bancoSheet.getRange(1, 1, 1, bancoSheet.getLastColumn()).getValues()[0]
+    .map(h => h.toString().trim());
+  const colTema = headers.indexOf('Tema');
+  if (colTema === -1) {
+    throw new Error('No se encontró la columna "Tema" en "' + CONFIG_BANCO.HOJA_BANCO + '".');
+  }
+
   const temasExistentes = {};
   const numFilasBanco = bancoSheet.getLastRow();
   if (numFilasBanco > 1) {
-    bancoSheet.getRange(2, 2, numFilasBanco - 1, 1).getValues().forEach(f => {
+    bancoSheet.getRange(2, colTema + 1, numFilasBanco - 1, 1).getValues().forEach(f => {
       if (f[0]) temasExistentes[f[0].toString().toLowerCase()] = true;
     });
   }
@@ -86,14 +98,12 @@ function agregarPriorizadasAlBanco_() {
   });
 
   temasNuevos.forEach(tema => {
-    const fila = COLUMNAS_BANCO.map(col => {
-      if (col === 'Estrategia') return CONFIG_BANCO.ESTRATEGIA_DEFAULT;
-      if (col === 'Tema') return tema;
-      if (col === 'Espacio') return CONFIG_BANCO.ESPACIO_DEFAULT;
-      if (col === 'Canales') return CONFIG_BANCO.CANALES_DEFAULT;
-      return '';
+    const filaNueva = bancoSheet.getLastRow() + 1;
+    const valores = headers.map(h => {
+      if (h === 'Tema') return tema;
+      return CONFIG_BANCO.VALORES_POR_DEFECTO[h] !== undefined ? CONFIG_BANCO.VALORES_POR_DEFECTO[h] : '';
     });
-    bancoSheet.appendRow(fila);
+    bancoSheet.getRange(filaNueva, 1, 1, valores.length).setValues([valores]);
   });
 
   return temasNuevos;
