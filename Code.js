@@ -116,9 +116,10 @@ function escribirPestañaDelDia_(priorizadas, fechaStr) {
   sheet.appendRow(['Query', 'Clicks', 'Impresiones', 'CTR', 'Posición', 'Categoría']);
   if (priorizadas.length > 0) {
     const valores = priorizadas.map(r => [
-      r.query, r.clicks, r.impressions, (r.ctr * 100).toFixed(2) + '%', redondearPosicion_(r.position), r.categoria
+      r.query, r.clicks, r.impressions, r.ctr, redondearPosicion_(r.position), r.categoria
     ]);
     sheet.getRange(2, 1, valores.length, 6).setValues(valores);
+    sheet.getRange(2, 4, valores.length, 1).setNumberFormat('0.00%');
     sheet.getRange(2, 5, valores.length, 1).setNumberFormat('0.0');
   }
   sheet.getRange(1, 1, 1, 6).setFontWeight('bold');
@@ -156,20 +157,20 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
 
   priorizadas.forEach(r => {
     const fila = keywordsExistentes.indexOf(r.query);
-    const ctrTexto = (r.ctr * 100).toFixed(2) + '%';
     if (fila === -1) {
       const filaNueva = sheet.getLastRow() + 1;
       sheet.getRange(filaNueva, 1, 1, 10).setValues([[
-        r.query, r.categoria, r.impressions, ctrTexto, redondearPosicion_(r.position),
+        r.query, r.categoria, r.impressions, r.ctr, redondearPosicion_(r.position),
         formulaAccionPropuesta_(filaNueva), fechaStr, fechaStr, 'Pendiente', ''
       ]]);
+      sheet.getRange(filaNueva, 4).setNumberFormat('0.00%');
       sheet.getRange(filaNueva, 5).setNumberFormat('0.0');
       aplicarValidacionEstado_(sheet, filaNueva, 1);
     } else {
       const filaSheet = fila + 2;
       sheet.getRange(filaSheet, 2).setValue(r.categoria);
       sheet.getRange(filaSheet, 3).setValue(r.impressions);
-      sheet.getRange(filaSheet, 4).setValue(ctrTexto);
+      sheet.getRange(filaSheet, 4).setNumberFormat('0.00%').setValue(r.ctr);
       sheet.getRange(filaSheet, 5).setNumberFormat('0.0').setValue(redondearPosicion_(r.position));
       sheet.getRange(filaSheet, 8).setValue(fechaStr); // Última actualización
     }
@@ -194,10 +195,16 @@ function formulaAccionPropuesta_(fila) {
   // regional alemana, donde "," es el separador decimal y ";" separa
   // argumentos de función — con "," las fórmulas daban "Fehler beim
   // Parsen der Formel" (12/09/2026).
+  // CTR se referencia directo (D<fila>), SIN VALUE(): antes se escribía
+  // como texto ("0.00%", con punto decimal) y VALUE() en un Sheet con
+  // configuración regional alemana espera coma decimal ("0,00%") — fallaba
+  // silenciosamente, el error caía en el IFERROR de afuera y la fórmula
+  // siempre daba vacío. Ahora CTR se guarda como número real (ver
+  // actualizarSeguimiento_/escribirPestañaDelDia_), no hace falta parsear.
   const f = fila;
   return '=IFERROR(IFS('
-    + 'AND(E' + f + '<=Data!$F$2;VALUE(D' + f + ')<=Data!$G$2/100;C' + f + '>=Data!$H$2);Data!$J$2;'
-    + 'AND(E' + f + '>=Data!$E$3;E' + f + '<=Data!$F$3;VALUE(D' + f + ')<=Data!$G$3/100;C' + f + '>=Data!$H$3);Data!$J$3;'
+    + 'AND(E' + f + '<=Data!$F$2;D' + f + '<=Data!$G$2/100;C' + f + '>=Data!$H$2);Data!$J$2;'
+    + 'AND(E' + f + '>=Data!$E$3;E' + f + '<=Data!$F$3;D' + f + '<=Data!$G$3/100;C' + f + '>=Data!$H$3);Data!$J$3;'
     + 'AND(E' + f + '>=Data!$E$4;C' + f + '>=Data!$H$4);Data!$J$4;'
     + 'AND(E' + f + '<=Data!$F$5;C' + f + '<=Data!$I$5);Data!$J$5;'
     + 'AND(E' + f + '>=Data!$E$6;C' + f + '<=Data!$I$6);Data!$J$6;'
