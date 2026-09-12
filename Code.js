@@ -4,9 +4,19 @@
  * genérico y no debería tocarse al reutilizarlo para otro sitio.
  */
 const CONFIG = {
-  // Debe coincidir EXACTO con la propiedad verificada en Search Console
-  // (dominio o prefijo URL, con/sin barra final según cómo esté verificada).
-  SITE_URL: 'https://www.yfokus.de/',
+  // Debe coincidir EXACTO con la propiedad verificada en Search Console.
+  // Dos formatos posibles según cómo esté verificada la propiedad:
+  //   - Propiedad de DOMINIO (ícono de globo, ej. "yfokus.de"):
+  //     usar 'sc-domain:yfokus.de' (con ese prefijo literal).
+  //   - Propiedad de PREFIJO DE URL (ej. "https://www.yfokus.de/"):
+  //     usar la URL completa tal cual aparece en Search Console.
+  // yfokus.de está verificada como propiedad de DOMINIO (confirmado
+  // 12/09/2026 en search.google.com/search-console → selector de
+  // propiedades) — con la URL de prefijo la API daba 403 "User does not
+  // have sufficient permission for site" pese a que admin@yfokus.de sí
+  // es Inhaber, porque el identificador no coincidía con ninguna
+  // propiedad real.
+  SITE_URL: 'sc-domain:yfokus.de',
 
   DIAS_ATRAS: 90,               // ventana de datos a traer de la API
   ROW_LIMIT_API: 1000,          // máximo de filas a pedir a la API (límite de Google: 25000)
