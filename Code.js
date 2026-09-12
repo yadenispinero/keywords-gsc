@@ -40,7 +40,7 @@ function exportarKeywordsGSC() {
     rowLimit: CONFIG.ROW_LIMIT_API
   };
 
-  const response = Webmasters.Searchanalytics.query(request, CONFIG.SITE_URL);
+  const response = consultarSearchConsole_(request);
   const rows = response.rows || [];
 
   const clasificadas = rows.map(r => {
@@ -68,6 +68,32 @@ function exportarKeywordsGSC() {
   const fechaStr = fmt(hoy);
   escribirPestañaDelDia_(priorizadas, fechaStr);
   actualizarSeguimiento_(priorizadas, fechaStr);
+}
+
+/**
+ * Llama la Search Console API directamente por REST (UrlFetchApp + token
+ * OAuth del script), en vez de depender del servicio avanzado "Search
+ * Console API"/"Webmasters API" del editor de Apps Script — Google lo ha
+ * ido recortando de esa lista y ya no aparece de forma consistente. Solo
+ * requiere el scope `webmasters.readonly` en appsscript.json.
+ */
+function consultarSearchConsole_(request) {
+  const url = 'https://www.googleapis.com/webmasters/v3/sites/'
+    + encodeURIComponent(CONFIG.SITE_URL) + '/searchAnalytics/query';
+
+  const httpResponse = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify(request),
+    muteHttpExceptions: true
+  });
+
+  if (httpResponse.getResponseCode() !== 200) {
+    throw new Error('Search Console API error ' + httpResponse.getResponseCode()
+      + ': ' + httpResponse.getContentText());
+  }
+  return JSON.parse(httpResponse.getContentText());
 }
 
 function escribirPestañaDelDia_(priorizadas, fechaStr) {

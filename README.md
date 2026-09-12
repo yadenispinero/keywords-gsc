@@ -55,12 +55,13 @@ para obtener el `.clasp.json` real (con el scriptId), y luego copiar
 encima `Code.js` y `appsscript.json` de este repo antes de hacer
 `clasp push`.
 
-## 6. Habilitar el servicio avanzado "Search Console API"
+## 6. Nada que habilitar como "servicio avanzado"
 
-`appsscript.json` ya declara `enabledAdvancedServices` con el servicio
-Webmasters (Search Console API), así que un `clasp push` debería
-bastar. Si el editor web no lo refleja: Servicios (ícono +) → buscar
-"Search Console API" → Añadir.
+El script llama la Search Console API directamente por REST
+(`UrlFetchApp` + el token OAuth del propio script), no vía el picker de
+"Servicios avanzados" del editor — ese listado de Google ya no incluye
+Search Console/Webmasters de forma confiable. `appsscript.json` ya trae
+el scope `webmasters.readonly` necesario; con `clasp push` alcanza.
 
 ## 7. Ajustar `CONFIG` en `Code.js`
 

@@ -30,12 +30,21 @@ Este script NO usa IA — es solo la Search Console API + heurísticas de
 umbral (impresiones/CTR). No hay presupuesto de Gemini/LLM que cuidar
 aquí, a diferencia de los proyectos de `sistema-busqueda-empleo`.
 
+## Search Console API sin servicio avanzado (12/09/2026)
+`consultarSearchConsole_()` llama la API por REST directo
+(`UrlFetchApp` + `ScriptApp.getOAuthToken()`), no vía el servicio
+avanzado "Search Console API"/"Webmasters" del picker del editor de
+Apps Script. Motivo: en la cuenta de prueba (admin@yfokus.de,
+12/09/2026) esa opción no aparecía en el listado de servicios avanzados
+del editor pese a probar ambos nombres — Google ha ido recortando ese
+catálogo. El scope `webmasters.readonly` en `appsscript.json` es
+suficiente sin necesidad de tocar nada en el editor ni en la consola de
+GCP.
+
 ## Configuración manual necesaria (no automatizable por Claude Code)
-- Habilitar el servicio avanzado "Search Console API" ya queda declarado
-  en `appsscript.json` (`enabledAdvancedServices`), pero clasp/Apps Script
-  requiere que el proyecto esté autorizado con una cuenta de Google que
-  tenga acceso de al menos "Restringido" o superior a la propiedad de
-  Search Console del sitio en `CONFIG.SITE_URL`.
+- El proyecto debe estar autorizado con una cuenta de Google que tenga
+  acceso de al menos "Restringido" o superior a la propiedad de Search
+  Console del sitio en `CONFIG.SITE_URL`.
 - Verificar que `CONFIG.SITE_URL` coincide EXACTO con cómo está verificada
   la propiedad en Search Console (dominio vs. prefijo URL, con/sin barra
   final) — si no coincide, la API devuelve error o 0 filas.
