@@ -157,17 +157,20 @@ function consultarAutocomplete_(consulta, hl, gl) {
  * relativa que da este endpoint (no expone volumen real). Cuanto más
  * bajo el número, más arriba la puso Google.
  *
- * "Volumen mensual (Keyword Surfer)" (12/09/2026): columna manual — se
- * deja vacía aquí, Yadenis la rellena a mano tras el Paso 3 (ver tarea
- * #93). Va en columna propia, no mezclada con Notas.
+ * "Volumen mensual (Keyword Surfer)", "Top 10 dominios (Paso 4)", "Fecha
+ * evaluación competencia" y "Acción sugerida (competencia)" (12/09/2026):
+ * columnas manuales de Paso 3/4 — se dejan vacías aquí, Yadenis las
+ * rellena a mano (ver tareas #93/#94). Absorben lo que antes era la
+ * pestaña "Competencia" separada, eliminada por redundante.
  */
 function escribirPreguntasNuevas_(sheet, preguntasNuevas, fechaStr) {
   preguntasNuevas.forEach(p => {
     const filaNueva = sheet.getLastRow() + 1;
-    sheet.getRange(filaNueva, 1, 1, 9).setValues([[
-      p.pregunta, p.idioma, p.posicion, p.localizacion, p.semilla, '', fechaStr, 'Pendiente', ''
+    sheet.getRange(filaNueva, 1, 1, 12).setValues([[
+      p.pregunta, p.idioma, p.posicion, p.localizacion, p.semilla, '', '', '', '', fechaStr, 'Pendiente', ''
     ]]);
-    aplicarValidacionEstado_(sheet, filaNueva, 1, 8);
+    aplicarValidacionEstado_(sheet, filaNueva, 1, 11);
+    aplicarValidacionAccionCompetencia_(sheet, filaNueva, 1, 9);
   });
 }
 
@@ -177,9 +180,13 @@ function obtenerOCrearHojaPreguntas_() {
   if (sheet) return sheet;
 
   sheet = ss.insertSheet(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
-  sheet.appendRow(['Pregunta', 'Idioma', 'Posición autocompletado', 'Localización', 'Término semilla', 'Volumen mensual (Keyword Surfer)', 'Fecha detectada', 'Estado', 'Notas']);
-  sheet.getRange(1, 1, 1, 9).setFontWeight('bold');
+  sheet.appendRow([
+    'Pregunta', 'Idioma', 'Posición autocompletado', 'Localización', 'Término semilla',
+    'Volumen mensual (Keyword Surfer)', 'Top 10 dominios (Paso 4)', 'Fecha evaluación competencia',
+    'Acción sugerida (competencia)', 'Fecha detectada', 'Estado', 'Notas'
+  ]);
+  sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 9);
+  sheet.autoResizeColumns(1, 12);
   return sheet;
 }

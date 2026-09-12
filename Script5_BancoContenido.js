@@ -77,8 +77,8 @@ function agregarPriorizadasAlBanco_() {
   }
 
   const temasNuevos = [];
-  preguntas.getRange(2, 1, preguntas.getLastRow() - 1, 8).getValues().forEach(fila => {
-    const pregunta = fila[0], estado = fila[7];
+  preguntas.getRange(2, 1, preguntas.getLastRow() - 1, 11).getValues().forEach(fila => {
+    const pregunta = fila[0], estado = fila[10];
     if (estado !== 'Priorizada') return;
     if (temasExistentes[pregunta.toLowerCase()]) return;
     temasExistentes[pregunta.toLowerCase()] = true;
@@ -100,8 +100,8 @@ function agregarPriorizadasAlBanco_() {
 }
 
 /**
- * Cuenta las filas por Estado en "Seguimiento" (columna 9) y "Preguntas"
- * (columna 8) de esta misma Hoja, combinadas en un solo total.
+ * Cuenta las filas por Estado en "Seguimiento" (columna 13) y "Preguntas"
+ * (columna 11) de esta misma Hoja, combinadas en un solo total.
  */
 function contarPorEstado_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -116,8 +116,8 @@ function contarPorEstado_() {
     });
   };
 
-  sumar(CONFIG.NOMBRE_HOJA_SEGUIMIENTO, 9);
-  sumar(CONFIG_PREGUNTAS.HOJA_PREGUNTAS, 8);
+  sumar(CONFIG.NOMBRE_HOJA_SEGUIMIENTO, 13);
+  sumar(CONFIG_PREGUNTAS.HOJA_PREGUNTAS, 11);
   return totales;
 }
 
