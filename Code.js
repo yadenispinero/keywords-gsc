@@ -177,37 +177,72 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
 }
 
 /**
- * Fórmula de "Acción propuesta": VLOOKUP contra la tabla de reglas en
- * Data!D:E (Categoría exacta → Acción sugerida) — así el mapeo se edita
- * directamente en la Hoja (agregar/cambiar reglas) sin tocar código. No
- * reemplaza el juicio manual — casos especiales (typos de marca, keywords
- * ya cubiertas, candidatas de schema, etc.) se documentan a mano en Notas
- * y se marcan en Estado.
+ * Fórmula de "Acción propuesta": evalúa, en orden de prioridad, las 5
+ * reglas de Data!D2:J6 (Posición mín/máx, CTR máx, Impresiones mín/máx →
+ * Acción propuesta) contra Posición/CTR/Impresiones de la misma fila.
+ * Tanto los umbrales como el texto de salida se leen en vivo de esas
+ * celdas — cambiar un número o el texto de una acción en Data se refleja
+ * solo, sin tocar código ni las filas ya escritas. La ESTRUCTURA de qué
+ * campos importan en cada regla sí está fija en la fórmula (rediseñar
+ * eso si hace falta sí requiere tocar este código). No reemplaza el
+ * juicio manual — casos especiales (typos de marca, keywords ya
+ * cubiertas, candidatas de schema, etc.) se documentan a mano en Notas y
+ * se marcan en Estado.
  */
 function formulaAccionPropuesta_(fila) {
-  return '=IFERROR(VLOOKUP(B' + fila + ',Data!D:E,2,FALSE),"")';
+  const f = fila;
+  return '=IFERROR(IFS('
+    + 'AND(E' + f + '<=Data!$F$2,VALUE(D' + f + ')<=Data!$G$2/100,C' + f + '>=Data!$H$2),Data!$J$2,'
+    + 'AND(E' + f + '>=Data!$E$3,E' + f + '<=Data!$F$3,VALUE(D' + f + ')<=Data!$G$3/100,C' + f + '>=Data!$H$3),Data!$J$3,'
+    + 'AND(E' + f + '>=Data!$E$4,C' + f + '>=Data!$H$4),Data!$J$4,'
+    + 'AND(E' + f + '<=Data!$F$5,C' + f + '<=Data!$I$5),Data!$J$5,'
+    + 'AND(E' + f + '>=Data!$E$6,C' + f + '<=Data!$I$6),Data!$J$6,'
+    + 'TRUE,""'
+    + '),"")';
 }
 
 /**
- * Crea (si no existe) la tabla de reglas de Acción propuesta en
- * Data!D:E, junto a la tabla de States/Description que ya usa Yadenis
- * en columnas A:B. Idempotente — si ya existe, no la toca (para no pisar
- * reglas que ella haya editado a mano).
+ * Crea (si no existe) las dos tablas de Data que usa el script: Estados
+ * (A:B, para el dropdown de Estado) y Reglas de Acción propuesta (D:J,
+ * para la fórmula de arriba). Idempotente — si Yadenis ya las armó a
+ * mano (o las trae de una corrida anterior), no las toca. Sirve para que
+ * el script quede autocontenido al reutilizarlo en un sitio/empresa
+ * nueva sin tener que armar las tablas de Data a mano desde cero.
  */
 function asegurarReglasAccionEnData_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let dataSheet = ss.getSheetByName('Data');
   if (!dataSheet) dataSheet = ss.insertSheet('Data');
 
-  if (dataSheet.getRange('D1').getValue() === 'Categoría (regla)') return;
+  if (dataSheet.getRange('A1').getValue() === '') {
+    dataSheet.getRange('A1:B1').setValues([['Estado', 'Description']]);
+    dataSheet.getRange('A2:B8').setValues([
+      ['Por optimizar', 'Ya apareces en el top pero el CTR es bajo — revisar title/meta/snippet de esa página. Prioridad más alta cuanto más arriba esté la posición.'],
+      ['Por investigar volumen', 'Candidata que aún no pasó por Keyword Surfer (Paso 3).'],
+      ['Por evaluar competencia', 'Ya tiene volumen, falta ver competencia en GSDE (Paso 4).'],
+      ['Priorizada', 'Ya pasó los 4 pasos, lista para anexo-keywords-y-entidades.md.'],
+      ['Descartada', 'Se decidió no perseguir (volumen insignificante, ruido, o duplicado de otra keyword ya cubierta).'],
+      ['Pendiente', 'Recién escrito.'],
+      ['Por mejorar contenido/ranking', 'El ranking es el problema, no el snippet — requiere contenido más fuerte, enlaces internos o revisar schema/entidad.']
+    ]);
+    dataSheet.getRange('A1:B1').setFontWeight('bold');
+    dataSheet.autoResizeColumns(1, 2);
+  }
 
-  dataSheet.getRange('D1:E1').setValues([['Categoría (regla)', 'Acción propuesta']]);
-  dataSheet.getRange('D2:E3').setValues([
-    ['Oportunidad (muchas impresiones, pocos clics)', 'Por optimizar'],
-    ['Casi ausente (pocas impresiones)', 'Por investigar volumen']
-  ]);
-  dataSheet.getRange('D1:E1').setFontWeight('bold');
-  dataSheet.autoResizeColumns(4, 2);
+  if (dataSheet.getRange('D1').getValue() !== 'Regla') {
+    dataSheet.getRange('D1:J1').setValues([[
+      'Regla', 'Posición mín', 'Posición máx', 'CTR máx (%)', 'Impresiones mín', 'Impresiones máx', 'Acción propuesta'
+    ]]);
+    dataSheet.getRange('D2:J6').setValues([
+      [1, '', 5, 5, 50, '', 'Por optimizar'],
+      [2, 6, 15, 3, 50, '', 'Por optimizar'],
+      [3, 16, '', '', 30, '', 'Por mejorar contenido/ranking'],
+      [4, '', 40, '', '', 10, 'Por investigar volumen'],
+      [5, 41, '', '', '', 3, 'Descartada']
+    ]);
+    dataSheet.getRange('D1:J1').setFontWeight('bold');
+    dataSheet.autoResizeColumns(4, 7);
+  }
 }
 
 /**
