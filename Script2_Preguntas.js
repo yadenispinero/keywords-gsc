@@ -29,6 +29,7 @@ const CONFIG_PREGUNTAS = {
   HOJA_SEMILLAS: 'Semillas',
   HOJA_PREGUNTAS: 'Preguntas',
   PAUSA_ENTRE_LLAMADAS_MS: 200,
+  MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA: 15, // tope por cada combinación semilla+idioma (ej. "Odoo"+EN)
   IDIOMAS: [
     {
       codigo: 'DE', hl: 'de', gl: 'de',
@@ -68,12 +69,18 @@ function investigarPreguntasAutocomplete() {
   semillas.forEach(semilla => {
     const idiomasAplicables = filtrarIdiomas_(semilla.idiomas);
     idiomasAplicables.forEach(idioma => {
-      idioma.prefijos.forEach(prefijo => {
+      const encontradasEnEsteIdioma = []; // tope por semilla+idioma, ver CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA
+      for (let i = 0; i < idioma.prefijos.length; i++) {
+        if (encontradasEnEsteIdioma.length >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) break;
+
+        const prefijo = idioma.prefijos[i];
         const partes = [prefijo, semilla.termino, semilla.localizacion].filter(p => p !== '');
         const consulta = partes.join(' ');
         const sugerencias = consultarAutocomplete_(consulta, idioma.hl, idioma.gl);
         sugerencias.forEach(s => {
+          if (encontradasEnEsteIdioma.length >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) return;
           if (s.toLowerCase().indexOf(semilla.termino.toLowerCase()) !== -1) {
+            encontradasEnEsteIdioma.push(s);
             preguntasEncontradas.push({
               pregunta: s, idioma: idioma.codigo,
               semilla: semilla.termino, localizacion: semilla.localizacion
@@ -81,7 +88,7 @@ function investigarPreguntasAutocomplete() {
           }
         });
         Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
-      });
+      }
     });
   });
 
