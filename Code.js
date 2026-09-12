@@ -223,66 +223,12 @@ function obtenerOCrearHojaSeguimiento_() {
 }
 
 /**
- * ÚNICA VEZ (12/09/2026): migra la pestaña Seguimiento ya existente (con
- * el orden de columnas viejo, o el que Yadenis haya reordenado a mano) al
- * nuevo orden de arriba, sin perder los datos ya escritos. Detecta cada
- * columna por su encabezado (no por posición fija), así que funciona sin
- * importar en qué orden estén hoy. Borrar esta función (y
- * aplicarNotasIniciales_) del código después de correrla una vez —
- * quedan aquí solo para que Yadenis las ejecute desde el editor.
- */
-function migrarEstructuraSeguimiento_() {
-  const HEADERS_NUEVOS = [
-    'Keyword', 'Categoría', 'Impresiones', 'CTR', 'Posición',
-    'Acción propuesta', 'Fecha detectada', 'Última actualización', 'Estado', 'Notas'
-  ];
-
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.NOMBRE_HOJA_SEGUIMIENTO);
-  const datos = sheet.getDataRange().getValues();
-  const headersActuales = datos[0];
-  const filas = datos.slice(1);
-
-  const idx = {};
-  headersActuales.forEach((h, i) => { idx[h] = i; });
-  const val = (fila, nombreCol, porDefecto) =>
-    idx[nombreCol] !== undefined ? fila[idx[nombreCol]] : porDefecto;
-
-  const nuevasFilas = filas
-    .filter(fila => fila.some(celda => celda !== ''))
-    .map((fila, i) => {
-      const numFila = i + 2;
-      return [
-        val(fila, 'Keyword', ''),
-        val(fila, 'Categoría', ''),
-        val(fila, 'Impresiones', ''),
-        val(fila, 'CTR', ''),
-        val(fila, 'Posición', ''),
-        formulaAccionPropuesta_(numFila),
-        val(fila, 'Fecha detectada', ''),
-        val(fila, 'Última actualización', ''),
-        val(fila, 'Estado', 'Pendiente'),
-        val(fila, 'Notas', '')
-      ];
-    });
-
-  sheet.clearContents();
-  sheet.getRange(1, 1, 1, HEADERS_NUEVOS.length).setValues([HEADERS_NUEVOS]);
-  if (nuevasFilas.length > 0) {
-    sheet.getRange(2, 1, nuevasFilas.length, HEADERS_NUEVOS.length).setValues(nuevasFilas);
-    sheet.getRange(2, 5, nuevasFilas.length, 1).setNumberFormat('0.0');
-    aplicarValidacionEstado_(sheet, 2, nuevasFilas.length);
-  }
-  sheet.getRange(1, 1, 1, HEADERS_NUEVOS.length).setFontWeight('bold');
-  sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, HEADERS_NUEVOS.length);
-}
-
-/**
  * ÚNICA VEZ (12/09/2026): aplica a las keywords ya detectadas hoy el
  * juicio manual que Yadenis dio en el chat (typo de marca, candidata de
  * schema, ya cubierta en otro cluster, etc.) — no es lógica genérica
  * reutilizable, por eso va hardcodeado por texto exacto de keyword.
- * Correr DESPUÉS de migrarEstructuraSeguimiento_(). Borrar tras usarla.
+ * Correr DESPUÉS de recrear la pestaña Seguimiento desde cero (eliminarla
+ * y volver a correr exportarKeywordsGSC). Borrar tras usarla.
  */
 function aplicarNotasIniciales_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.NOMBRE_HOJA_SEGUIMIENTO);
