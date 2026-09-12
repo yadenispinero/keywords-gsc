@@ -190,15 +190,19 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
  * se marcan en Estado.
  */
 function formulaAccionPropuesta_(fila) {
+  // Separador de argumentos ";" (no ","): la Hoja está en configuración
+  // regional alemana, donde "," es el separador decimal y ";" separa
+  // argumentos de función — con "," las fórmulas daban "Fehler beim
+  // Parsen der Formel" (12/09/2026).
   const f = fila;
   return '=IFERROR(IFS('
-    + 'AND(E' + f + '<=Data!$F$2,VALUE(D' + f + ')<=Data!$G$2/100,C' + f + '>=Data!$H$2),Data!$J$2,'
-    + 'AND(E' + f + '>=Data!$E$3,E' + f + '<=Data!$F$3,VALUE(D' + f + ')<=Data!$G$3/100,C' + f + '>=Data!$H$3),Data!$J$3,'
-    + 'AND(E' + f + '>=Data!$E$4,C' + f + '>=Data!$H$4),Data!$J$4,'
-    + 'AND(E' + f + '<=Data!$F$5,C' + f + '<=Data!$I$5),Data!$J$5,'
-    + 'AND(E' + f + '>=Data!$E$6,C' + f + '<=Data!$I$6),Data!$J$6,'
-    + 'TRUE,""'
-    + '),"")';
+    + 'AND(E' + f + '<=Data!$F$2;VALUE(D' + f + ')<=Data!$G$2/100;C' + f + '>=Data!$H$2);Data!$J$2;'
+    + 'AND(E' + f + '>=Data!$E$3;E' + f + '<=Data!$F$3;VALUE(D' + f + ')<=Data!$G$3/100;C' + f + '>=Data!$H$3);Data!$J$3;'
+    + 'AND(E' + f + '>=Data!$E$4;C' + f + '>=Data!$H$4);Data!$J$4;'
+    + 'AND(E' + f + '<=Data!$F$5;C' + f + '<=Data!$I$5);Data!$J$5;'
+    + 'AND(E' + f + '>=Data!$E$6;C' + f + '<=Data!$I$6);Data!$J$6;'
+    + 'TRUE;""'
+    + ');"")';
 }
 
 /**
