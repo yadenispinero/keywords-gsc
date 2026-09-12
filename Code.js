@@ -169,7 +169,7 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
       ]]);
       sheet.getRange(filaNueva, 4).setNumberFormat('0.00%');
       sheet.getRange(filaNueva, 5).setNumberFormat('0.0');
-      aplicarValidacionEstado_(sheet, filaNueva, 1);
+      aplicarValidacionEstado_(sheet, filaNueva, 1, 9);
     } else {
       const filaSheet = fila + 2;
       sheet.getRange(filaSheet, 2).setValue(r.categoria);
@@ -271,13 +271,16 @@ function asegurarReglasAccionEnData_() {
 }
 
 /**
- * Aplica el dropdown de Estado (columna I) validado contra la lista de
- * la pestaña "Data" (columna A, desde la fila 2). setAllowInvalid(true):
- * si la celda ya tuviera algo que no calza con la lista, solo lo marca
- * visualmente (triángulo de advertencia) en vez de romper el script.
- * Si la pestaña "Data" no existe todavía, no falla — no aplica validación.
+ * Aplica el dropdown de Estado (columna `columna`) validado contra la
+ * lista de la pestaña "Data" (columna A, desde la fila 2). Compartida
+ * entre Script1 (Seguimiento, columna 9) y Script2 (Preguntas, columna
+ * 4) — mismo vocabulario de Estados en toda la Hoja.
+ * setAllowInvalid(true): si la celda ya tuviera algo que no calza con la
+ * lista, solo lo marca visualmente (triángulo de advertencia) en vez de
+ * romper el script. Si la pestaña "Data" no existe todavía, no falla —
+ * no aplica validación.
  */
-function aplicarValidacionEstado_(sheet, filaInicio, numFilas) {
+function aplicarValidacionEstado_(sheet, filaInicio, numFilas, columna) {
   if (numFilas === 0) return;
   const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
   if (!dataSheet) return;
@@ -287,7 +290,7 @@ function aplicarValidacionEstado_(sheet, filaInicio, numFilas) {
     .requireValueInRange(dataSheet.getRange(2, 1, numEstados, 1), true)
     .setAllowInvalid(true)
     .build();
-  sheet.getRange(filaInicio, 9, numFilas, 1).setDataValidation(rule);
+  sheet.getRange(filaInicio, columna, numFilas, 1).setDataValidation(rule);
 }
 
 function obtenerOCrearHojaSeguimiento_() {
