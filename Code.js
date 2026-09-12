@@ -177,21 +177,45 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
 }
 
 /**
- * Fórmula de "Acción propuesta": sugerencia genérica basada solo en la
- * Categoría de la misma fila. No reemplaza el juicio manual — casos
- * especiales (typos de marca, keywords ya cubiertas, candidatas de
- * schema, etc.) se documentan a mano en Notas y se marcan en Estado.
+ * Fórmula de "Acción propuesta": VLOOKUP contra la tabla de reglas en
+ * Data!D:E (Categoría exacta → Acción sugerida) — así el mapeo se edita
+ * directamente en la Hoja (agregar/cambiar reglas) sin tocar código. No
+ * reemplaza el juicio manual — casos especiales (typos de marca, keywords
+ * ya cubiertas, candidatas de schema, etc.) se documentan a mano en Notas
+ * y se marcan en Estado.
  */
 function formulaAccionPropuesta_(fila) {
-  return '=IF(B' + fila + '="Oportunidad (muchas impresiones, pocos clics)","Por optimizar",'
-    + 'IF(B' + fila + '="Casi ausente (pocas impresiones)","Por investigar volumen",""))';
+  return '=IFERROR(VLOOKUP(B' + fila + ',Data!D:E,2,FALSE),"")';
+}
+
+/**
+ * Crea (si no existe) la tabla de reglas de Acción propuesta en
+ * Data!D:E, junto a la tabla de States/Description que ya usa Yadenis
+ * en columnas A:B. Idempotente — si ya existe, no la toca (para no pisar
+ * reglas que ella haya editado a mano).
+ */
+function asegurarReglasAccionEnData_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let dataSheet = ss.getSheetByName('Data');
+  if (!dataSheet) dataSheet = ss.insertSheet('Data');
+
+  if (dataSheet.getRange('D1').getValue() === 'Categoría (regla)') return;
+
+  dataSheet.getRange('D1:E1').setValues([['Categoría (regla)', 'Acción propuesta']]);
+  dataSheet.getRange('D2:E3').setValues([
+    ['Oportunidad (muchas impresiones, pocos clics)', 'Por optimizar'],
+    ['Casi ausente (pocas impresiones)', 'Por investigar volumen']
+  ]);
+  dataSheet.getRange('D1:E1').setFontWeight('bold');
+  dataSheet.autoResizeColumns(4, 2);
 }
 
 /**
  * Aplica el dropdown de Estado (columna I) validado contra la lista de
- * la pestaña "Data" (columna A, desde la fila 2). Si esa pestaña no
- * existe todavía (ej. primera corrida en un sitio nuevo), no falla —
- * simplemente no aplica validación.
+ * la pestaña "Data" (columna A, desde la fila 2). setAllowInvalid(true):
+ * si la celda ya tuviera algo que no calza con la lista, solo lo marca
+ * visualmente (triángulo de advertencia) en vez de romper el script.
+ * Si la pestaña "Data" no existe todavía, no falla — no aplica validación.
  */
 function aplicarValidacionEstado_(sheet, filaInicio, numFilas) {
   if (numFilas === 0) return;
@@ -201,13 +225,15 @@ function aplicarValidacionEstado_(sheet, filaInicio, numFilas) {
   if (numEstados === 0) return;
   const rule = SpreadsheetApp.newDataValidation()
     .requireValueInRange(dataSheet.getRange(2, 1, numEstados, 1), true)
-    .setAllowInvalid(false)
+    .setAllowInvalid(true)
     .build();
   sheet.getRange(filaInicio, 9, numFilas, 1).setDataValidation(rule);
 }
 
 function obtenerOCrearHojaSeguimiento_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  asegurarReglasAccionEnData_();
+
   let sheet = ss.getSheetByName(CONFIG.NOMBRE_HOJA_SEGUIMIENTO);
   if (sheet) return sheet;
 
