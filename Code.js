@@ -138,11 +138,14 @@ function redondearPosicion_(position) {
 }
 
 /**
- * Columnas de Seguimiento: Keyword | Categoría | Impresiones | CTR |
- * Posición | Estado | Notas | Fecha detectada | Última actualización.
- * Si la keyword ya existe (columna A), solo se refrescan las columnas de
- * datos de GSC (C, D, E, I) — Estado (F) y Notas (G) son de trabajo manual
- * y nunca se pisan.
+ * Columnas de Seguimiento (reordenado 12/09/2026 a pedido de Yadenis):
+ * Keyword | Categoría | Impresiones | CTR | Posición | Acción propuesta
+ * (fórmula, columna F) | Fecha detectada | Última actualización | Estado |
+ * Notas. Acción propuesta es una fórmula que lee la Categoría de la misma
+ * fila — se recalcula sola, el script nunca la toca. Estado y Notas son
+ * 100% manuales (dropdown de Estado validado contra la pestaña "Data"):
+ * si la keyword ya existe, solo se refrescan las columnas de datos de GSC
+ * (Categoría, Impresiones, CTR, Posición, Última actualización).
  */
 function actualizarSeguimiento_(priorizadas, fechaStr) {
   const sheet = obtenerOCrearHojaSeguimiento_();
@@ -156,20 +159,51 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
     const ctrTexto = (r.ctr * 100).toFixed(2) + '%';
     if (fila === -1) {
       const filaNueva = sheet.getLastRow() + 1;
-      sheet.appendRow([
+      sheet.getRange(filaNueva, 1, 1, 10).setValues([[
         r.query, r.categoria, r.impressions, ctrTexto, redondearPosicion_(r.position),
-        'Pendiente', '', fechaStr, fechaStr
-      ]);
+        formulaAccionPropuesta_(filaNueva), fechaStr, fechaStr, 'Pendiente', ''
+      ]]);
       sheet.getRange(filaNueva, 5).setNumberFormat('0.0');
+      aplicarValidacionEstado_(sheet, filaNueva, 1);
     } else {
       const filaSheet = fila + 2;
       sheet.getRange(filaSheet, 2).setValue(r.categoria);
       sheet.getRange(filaSheet, 3).setValue(r.impressions);
       sheet.getRange(filaSheet, 4).setValue(ctrTexto);
       sheet.getRange(filaSheet, 5).setNumberFormat('0.0').setValue(redondearPosicion_(r.position));
-      sheet.getRange(filaSheet, 9).setValue(fechaStr);
+      sheet.getRange(filaSheet, 8).setValue(fechaStr); // Última actualización
     }
   });
+}
+
+/**
+ * Fórmula de "Acción propuesta": sugerencia genérica basada solo en la
+ * Categoría de la misma fila. No reemplaza el juicio manual — casos
+ * especiales (typos de marca, keywords ya cubiertas, candidatas de
+ * schema, etc.) se documentan a mano en Notas y se marcan en Estado.
+ */
+function formulaAccionPropuesta_(fila) {
+  return '=IF(B' + fila + '="Oportunidad (muchas impresiones, pocos clics)","Por optimizar",'
+    + 'IF(B' + fila + '="Casi ausente (pocas impresiones)","Por investigar volumen",""))';
+}
+
+/**
+ * Aplica el dropdown de Estado (columna I) validado contra la lista de
+ * la pestaña "Data" (columna A, desde la fila 2). Si esa pestaña no
+ * existe todavía (ej. primera corrida en un sitio nuevo), no falla —
+ * simplemente no aplica validación.
+ */
+function aplicarValidacionEstado_(sheet, filaInicio, numFilas) {
+  if (numFilas === 0) return;
+  const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
+  if (!dataSheet) return;
+  const numEstados = dataSheet.getRange('A2:A').getValues().filter(f => f[0] !== '').length;
+  if (numEstados === 0) return;
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(dataSheet.getRange(2, 1, numEstados, 1), true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange(filaInicio, 9, numFilas, 1).setDataValidation(rule);
 }
 
 function obtenerOCrearHojaSeguimiento_() {
@@ -180,12 +214,121 @@ function obtenerOCrearHojaSeguimiento_() {
   sheet = ss.insertSheet(CONFIG.NOMBRE_HOJA_SEGUIMIENTO, 0);
   sheet.appendRow([
     'Keyword', 'Categoría', 'Impresiones', 'CTR', 'Posición',
-    'Estado', 'Notas', 'Fecha detectada', 'Última actualización'
+    'Acción propuesta', 'Fecha detectada', 'Última actualización', 'Estado', 'Notas'
   ]);
-  sheet.getRange(1, 1, 1, 9).setFontWeight('bold');
+  sheet.getRange(1, 1, 1, 10).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 9);
+  sheet.autoResizeColumns(1, 10);
   return sheet;
+}
+
+/**
+ * ÚNICA VEZ (12/09/2026): migra la pestaña Seguimiento ya existente (con
+ * el orden de columnas viejo, o el que Yadenis haya reordenado a mano) al
+ * nuevo orden de arriba, sin perder los datos ya escritos. Detecta cada
+ * columna por su encabezado (no por posición fija), así que funciona sin
+ * importar en qué orden estén hoy. Borrar esta función (y
+ * aplicarNotasIniciales_) del código después de correrla una vez —
+ * quedan aquí solo para que Yadenis las ejecute desde el editor.
+ */
+function migrarEstructuraSeguimiento_() {
+  const HEADERS_NUEVOS = [
+    'Keyword', 'Categoría', 'Impresiones', 'CTR', 'Posición',
+    'Acción propuesta', 'Fecha detectada', 'Última actualización', 'Estado', 'Notas'
+  ];
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.NOMBRE_HOJA_SEGUIMIENTO);
+  const datos = sheet.getDataRange().getValues();
+  const headersActuales = datos[0];
+  const filas = datos.slice(1);
+
+  const idx = {};
+  headersActuales.forEach((h, i) => { idx[h] = i; });
+  const val = (fila, nombreCol, porDefecto) =>
+    idx[nombreCol] !== undefined ? fila[idx[nombreCol]] : porDefecto;
+
+  const nuevasFilas = filas
+    .filter(fila => fila.some(celda => celda !== ''))
+    .map((fila, i) => {
+      const numFila = i + 2;
+      return [
+        val(fila, 'Keyword', ''),
+        val(fila, 'Categoría', ''),
+        val(fila, 'Impresiones', ''),
+        val(fila, 'CTR', ''),
+        val(fila, 'Posición', ''),
+        formulaAccionPropuesta_(numFila),
+        val(fila, 'Fecha detectada', ''),
+        val(fila, 'Última actualización', ''),
+        val(fila, 'Estado', 'Pendiente'),
+        val(fila, 'Notas', '')
+      ];
+    });
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, HEADERS_NUEVOS.length).setValues([HEADERS_NUEVOS]);
+  if (nuevasFilas.length > 0) {
+    sheet.getRange(2, 1, nuevasFilas.length, HEADERS_NUEVOS.length).setValues(nuevasFilas);
+    sheet.getRange(2, 5, nuevasFilas.length, 1).setNumberFormat('0.0');
+    aplicarValidacionEstado_(sheet, 2, nuevasFilas.length);
+  }
+  sheet.getRange(1, 1, 1, HEADERS_NUEVOS.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, HEADERS_NUEVOS.length);
+}
+
+/**
+ * ÚNICA VEZ (12/09/2026): aplica a las keywords ya detectadas hoy el
+ * juicio manual que Yadenis dio en el chat (typo de marca, candidata de
+ * schema, ya cubierta en otro cluster, etc.) — no es lógica genérica
+ * reutilizable, por eso va hardcodeado por texto exacto de keyword.
+ * Correr DESPUÉS de migrarEstructuraSeguimiento_(). Borrar tras usarla.
+ */
+function aplicarNotasIniciales_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.NOMBRE_HOJA_SEGUIMIENTO);
+  const datos = sheet.getDataRange().getValues();
+  const headers = datos[0];
+  const colKeyword = headers.indexOf('Keyword');
+  const colEstado = headers.indexOf('Estado');
+  const colNotas = headers.indexOf('Notas');
+
+  const overrides = {
+    'it consulting': {
+      estado: 'Por optimizar',
+      nota: 'Posición floja (9.9) para 590 impr. y 0% CTR — revisar si el title/meta de la página que rankea usa esta keyword de forma clara.'
+    },
+    'it consulting berlin': {
+      estado: 'Por optimizar',
+      nota: 'Señal más fuerte del reporte: posición 2.2, 586 impr., 0% CTR. Revisar urgente title tag y meta description de esa página.'
+    },
+    'it-consulting berlin': {
+      estado: 'Por optimizar',
+      nota: 'Posición 1.5, 0% CTR — probablemente la misma página que "it consulting berlin" (variante con guión). Resolver junto con esa.'
+    },
+    'it consultant berlin': {
+      estado: 'Por optimizar',
+      nota: 'Mismo patrón que las anteriores (pos. 3.7, 0% CTR) — revisar junto con "it consulting berlin".'
+    },
+    'refokus': {
+      estado: 'Descartada',
+      nota: 'Typo de marca (gente escribiendo mal "Yfokus"), no es keyword de contenido.'
+    },
+    'it agency potsdam': {
+      nota: 'Evaluar agregar Potsdam a areaServed [A.7] si se confirma que se atiende esa zona.'
+    },
+    'erp consulting': {
+      nota: 'Ya cubierta en Cluster A/B de anexo-keywords-y-entidades.md, no es candidata nueva.'
+    }
+  };
+
+  datos.forEach((fila, i) => {
+    if (i === 0) return;
+    const o = overrides[fila[colKeyword]];
+    if (!o) return;
+    const numFila = i + 1;
+    if (o.estado) sheet.getRange(numFila, colEstado + 1).setValue(o.estado);
+    if (o.nota) sheet.getRange(numFila, colNotas + 1).setValue(o.nota);
+  });
 }
 
 /**
