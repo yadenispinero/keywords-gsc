@@ -141,16 +141,18 @@ function redondearPosicion_(position) {
 /**
  * Columnas de Seguimiento (reordenado 12/09/2026 a pedido de Yadenis):
  * Keyword | Categoría | Impresiones | CTR | Posición | Acción propuesta
- * (fórmula, columna F) | Fecha detectada | Última actualización | Estado |
- * Notas (fórmula, columna J). Acción propuesta y Notas son fórmulas que
- * se recalculan solas — el script nunca las toca en filas existentes.
- * Notas arranca con la Description de esa Acción propuesta (VLOOKUP
- * contra Data!A:B); si Yadenis escribe texto a mano encima, esa celda
- * puntual deja de ser fórmula y queda su nota manual — el resto sigue
- * actualizándose solo. Estado sí es 100% manual (dropdown validado
- * contra Data!A). Si la keyword ya existe, solo se refrescan las
- * columnas de datos de GSC (Categoría, Impresiones, CTR, Posición,
- * Última actualización).
+ * (fórmula, columna F) | Volumen mensual (Keyword Surfer) | Fecha
+ * detectada | Última actualización | Estado | Notas (fórmula, columna K).
+ * Acción propuesta y Notas son fórmulas que se recalculan solas — el
+ * script nunca las toca en filas existentes. Notas arranca con la
+ * Description de esa Acción propuesta (VLOOKUP contra Data!A:B); si
+ * Yadenis escribe texto a mano encima, esa celda puntual deja de ser
+ * fórmula y queda su nota manual — el resto sigue actualizándose solo.
+ * Volumen mensual y Estado son 100% manuales (Volumen se llena a mano
+ * tras el Paso 3 con Keyword Surfer; Estado con dropdown validado contra
+ * Data!A). Si la keyword ya existe, solo se refrescan las columnas de
+ * datos de GSC (Categoría, Impresiones, CTR, Posición, Última
+ * actualización) — Volumen mensual nunca se pisa, es trabajo manual.
  */
 function actualizarSeguimiento_(priorizadas, fechaStr) {
   const sheet = obtenerOCrearHojaSeguimiento_();
@@ -163,20 +165,20 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
     const fila = keywordsExistentes.indexOf(r.query);
     if (fila === -1) {
       const filaNueva = sheet.getLastRow() + 1;
-      sheet.getRange(filaNueva, 1, 1, 10).setValues([[
+      sheet.getRange(filaNueva, 1, 1, 11).setValues([[
         r.query, r.categoria, r.impressions, r.ctr, redondearPosicion_(r.position),
-        formulaAccionPropuesta_(filaNueva), fechaStr, fechaStr, 'Pendiente', formulaNotas_(filaNueva)
+        formulaAccionPropuesta_(filaNueva), '', fechaStr, fechaStr, 'Pendiente', formulaNotas_(filaNueva)
       ]]);
       sheet.getRange(filaNueva, 4).setNumberFormat('0.00%');
       sheet.getRange(filaNueva, 5).setNumberFormat('0.0');
-      aplicarValidacionEstado_(sheet, filaNueva, 1, 9);
+      aplicarValidacionEstado_(sheet, filaNueva, 1, 10);
     } else {
       const filaSheet = fila + 2;
       sheet.getRange(filaSheet, 2).setValue(r.categoria);
       sheet.getRange(filaSheet, 3).setValue(r.impressions);
       sheet.getRange(filaSheet, 4).setNumberFormat('0.00%').setValue(r.ctr);
       sheet.getRange(filaSheet, 5).setNumberFormat('0.0').setValue(redondearPosicion_(r.position));
-      sheet.getRange(filaSheet, 8).setValue(fechaStr); // Última actualización
+      sheet.getRange(filaSheet, 9).setValue(fechaStr); // Última actualización
     }
   });
 }
@@ -302,12 +304,12 @@ function obtenerOCrearHojaSeguimiento_() {
 
   sheet = ss.insertSheet(CONFIG.NOMBRE_HOJA_SEGUIMIENTO, 0);
   sheet.appendRow([
-    'Keyword', 'Categoría', 'Impresiones', 'CTR', 'Posición',
-    'Acción propuesta', 'Fecha detectada', 'Última actualización', 'Estado', 'Notas'
+    'Keyword', 'Categoría', 'Impresiones', 'CTR', 'Posición', 'Acción propuesta',
+    'Volumen mensual (Keyword Surfer)', 'Fecha detectada', 'Última actualización', 'Estado', 'Notas'
   ]);
-  sheet.getRange(1, 1, 1, 10).setFontWeight('bold');
+  sheet.getRange(1, 1, 1, 11).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 10);
+  sheet.autoResizeColumns(1, 11);
   return sheet;
 }
 

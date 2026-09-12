@@ -156,14 +156,18 @@ function consultarAutocomplete_(consulta, hl, gl) {
  * esa sugerencia para esa consulta — es la única señal de popularidad
  * relativa que da este endpoint (no expone volumen real). Cuanto más
  * bajo el número, más arriba la puso Google.
+ *
+ * "Volumen mensual (Keyword Surfer)" (12/09/2026): columna manual — se
+ * deja vacía aquí, Yadenis la rellena a mano tras el Paso 3 (ver tarea
+ * #93). Va en columna propia, no mezclada con Notas.
  */
 function escribirPreguntasNuevas_(sheet, preguntasNuevas, fechaStr) {
   preguntasNuevas.forEach(p => {
     const filaNueva = sheet.getLastRow() + 1;
-    sheet.getRange(filaNueva, 1, 1, 8).setValues([[
-      p.pregunta, p.idioma, p.posicion, p.localizacion, p.semilla, fechaStr, 'Pendiente', ''
+    sheet.getRange(filaNueva, 1, 1, 9).setValues([[
+      p.pregunta, p.idioma, p.posicion, p.localizacion, p.semilla, '', fechaStr, 'Pendiente', ''
     ]]);
-    aplicarValidacionEstado_(sheet, filaNueva, 1, 7);
+    aplicarValidacionEstado_(sheet, filaNueva, 1, 8);
   });
 }
 
@@ -173,9 +177,9 @@ function obtenerOCrearHojaPreguntas_() {
   if (sheet) return sheet;
 
   sheet = ss.insertSheet(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
-  sheet.appendRow(['Pregunta', 'Idioma', 'Posición autocompletado', 'Localización', 'Término semilla', 'Fecha detectada', 'Estado', 'Notas']);
-  sheet.getRange(1, 1, 1, 8).setFontWeight('bold');
+  sheet.appendRow(['Pregunta', 'Idioma', 'Posición autocompletado', 'Localización', 'Término semilla', 'Volumen mensual (Keyword Surfer)', 'Fecha detectada', 'Estado', 'Notas']);
+  sheet.getRange(1, 1, 1, 9).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 8);
+  sheet.autoResizeColumns(1, 9);
   return sheet;
 }
