@@ -8,23 +8,41 @@
  * sin costo. El filtrado fino de ruido queda manual (columna Estado) —
  * el volumen aquí es bajo (unas pocas decenas de sugerencias por
  * trimestre), no vale la pena meterle una pasada de IA.
+ *
+ * Multi-idioma (12/09/2026): cada término semilla se consulta en DE/EN/ES
+ * — cada idioma con sus propios prefijos de pregunta (no tiene sentido
+ * buscar "qué es" en una consulta en inglés) y su propio hl/gl para que
+ * el autocompletado devuelva resultados de ese mercado. Como el idioma
+ * de cada consulta lo elegimos nosotros (no hay que detectarlo), cada
+ * resultado se etiqueta con ese idioma al registrarlo en "Preguntas".
  */
 const CONFIG_PREGUNTAS = {
   HOJA_SEMILLAS: 'Semillas',
   HOJA_PREGUNTAS: 'Preguntas',
-  IDIOMA: 'de',   // hl= en el endpoint de autocompletado
-  PAIS: 'de',     // gl= en el endpoint
-  // Prefijos de pregunta + '' (el término solo, sin prefijo)
-  PREFIJOS: ['', 'qué es', 'cómo', 'por qué', 'cuándo', 'dónde', 'para qué', 'cuál'],
-  PAUSA_ENTRE_LLAMADAS_MS: 200
+  PAUSA_ENTRE_LLAMADAS_MS: 200,
+  IDIOMAS: [
+    {
+      codigo: 'DE', hl: 'de', gl: 'de',
+      prefijos: ['', 'was ist', 'wie', 'warum', 'wann', 'wo', 'wofür', 'welche']
+    },
+    {
+      codigo: 'EN', hl: 'en', gl: 'us',
+      prefijos: ['', 'what is', 'how to', 'why', 'when', 'where', 'what for', 'which']
+    },
+    {
+      codigo: 'ES', hl: 'es', gl: 'es',
+      prefijos: ['', 'qué es', 'cómo', 'por qué', 'cuándo', 'dónde', 'para qué', 'cuál']
+    }
+  ]
 };
 
 /**
  * Lee los términos semilla de la pestaña "Semillas" (columna A, desde la
- * fila 2), consulta el autocompletado de Google con cada prefijo de
- * CONFIG_PREGUNTAS.PREFIJOS, descarta lo que no contenga el término
- * semilla (filtro de ruido barato — ver comentario de arriba), y agrega
- * las preguntas nuevas a la pestaña "Preguntas" como "Pendiente".
+ * fila 2), consulta el autocompletado de Google con cada prefijo de cada
+ * idioma en CONFIG_PREGUNTAS.IDIOMAS, descarta lo que no contenga el
+ * término semilla (filtro de ruido barato — ver comentario de arriba), y
+ * agrega las preguntas nuevas a la pestaña "Preguntas" como "Pendiente",
+ * etiquetadas con el idioma de esa consulta.
  */
 function investigarPreguntasAutocomplete() {
   const semillas = leerSemillas_();
@@ -37,15 +55,17 @@ function investigarPreguntasAutocomplete() {
   const preguntasEncontradas = [];
 
   semillas.forEach(semilla => {
-    CONFIG_PREGUNTAS.PREFIJOS.forEach(prefijo => {
-      const consulta = prefijo ? (prefijo + ' ' + semilla) : semilla;
-      const sugerencias = consultarAutocomplete_(consulta);
-      sugerencias.forEach(s => {
-        if (s.toLowerCase().indexOf(semilla.toLowerCase()) !== -1) {
-          preguntasEncontradas.push({ pregunta: s, semilla: semilla });
-        }
+    CONFIG_PREGUNTAS.IDIOMAS.forEach(idioma => {
+      idioma.prefijos.forEach(prefijo => {
+        const consulta = prefijo ? (prefijo + ' ' + semilla) : semilla;
+        const sugerencias = consultarAutocomplete_(consulta, idioma.hl, idioma.gl);
+        sugerencias.forEach(s => {
+          if (s.toLowerCase().indexOf(semilla.toLowerCase()) !== -1) {
+            preguntasEncontradas.push({ pregunta: s, idioma: idioma.codigo, semilla: semilla });
+          }
+        });
+        Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
       });
-      Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
     });
   });
 
@@ -62,9 +82,9 @@ function leerSemillas_() {
     .filter(v => v !== '');
 }
 
-function consultarAutocomplete_(consulta) {
+function consultarAutocomplete_(consulta, hl, gl) {
   const url = 'https://suggestqueries.google.com/complete/search?client=firefox&hl='
-    + CONFIG_PREGUNTAS.IDIOMA + '&gl=' + CONFIG_PREGUNTAS.PAIS + '&q=' + encodeURIComponent(consulta);
+    + hl + '&gl=' + gl + '&q=' + encodeURIComponent(consulta);
   const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   if (response.getResponseCode() !== 200) return [];
   const data = JSON.parse(response.getContentText());
@@ -72,30 +92,32 @@ function consultarAutocomplete_(consulta) {
 }
 
 /**
- * Agrega a "Preguntas" solo las preguntas que no estén ya (columna A) —
- * si ya existe, no la toca (Estado/Notas son de trabajo manual y nunca
- * se pisan, mismo criterio que actualizarSeguimiento_ en Code.js).
+ * Agrega a "Preguntas" solo las combinaciones (pregunta + idioma) que no
+ * estén ya — si ya existe, no la toca (Estado/Notas son de trabajo
+ * manual y nunca se pisan, mismo criterio que actualizarSeguimiento_ en
+ * Code.js). El mismo texto puede repetirse en dos idiomas distintos
+ * (raro, pero posible) y se registra por separado.
  */
 function escribirPreguntasNuevas_(preguntasEncontradas, fechaStr) {
   const sheet = obtenerOCrearHojaPreguntas_();
   const numFilas = sheet.getLastRow();
-  const existentes = numFilas > 1
-    ? sheet.getRange(2, 1, numFilas - 1, 1).getValues().map(f => f[0])
-    : [];
+  const existentes = {};
+  if (numFilas > 1) {
+    sheet.getRange(2, 1, numFilas - 1, 2).getValues().forEach(f => {
+      existentes[f[0].toLowerCase() + '|' + f[1]] = true;
+    });
+  }
 
-  const yaAgregadasEnEstaCorrida = {};
   preguntasEncontradas.forEach(p => {
-    const clave = p.pregunta.toLowerCase();
-    if (yaAgregadasEnEstaCorrida[clave]) return;
-    if (existentes.indexOf(p.pregunta) !== -1) return;
-    yaAgregadasEnEstaCorrida[clave] = true;
+    const clave = p.pregunta.toLowerCase() + '|' + p.idioma;
+    if (existentes[clave]) return;
+    existentes[clave] = true;
 
     const filaNueva = sheet.getLastRow() + 1;
-    sheet.getRange(filaNueva, 1, 1, 5).setValues([[
-      p.pregunta, p.semilla, fechaStr, 'Pendiente', ''
+    sheet.getRange(filaNueva, 1, 1, 6).setValues([[
+      p.pregunta, p.idioma, p.semilla, fechaStr, 'Pendiente', ''
     ]]);
-    existentes.push(p.pregunta);
-    aplicarValidacionEstado_(sheet, filaNueva, 1, 4);
+    aplicarValidacionEstado_(sheet, filaNueva, 1, 5);
   });
 }
 
@@ -105,9 +127,9 @@ function obtenerOCrearHojaPreguntas_() {
   if (sheet) return sheet;
 
   sheet = ss.insertSheet(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
-  sheet.appendRow(['Pregunta', 'Término semilla', 'Fecha detectada', 'Estado', 'Notas']);
-  sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+  sheet.appendRow(['Pregunta', 'Idioma', 'Término semilla', 'Fecha detectada', 'Estado', 'Notas']);
+  sheet.getRange(1, 1, 1, 6).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 5);
+  sheet.autoResizeColumns(1, 6);
   return sheet;
 }
