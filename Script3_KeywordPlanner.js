@@ -21,7 +21,11 @@
 const CONFIG_KEYWORD_PLANNER = {
   // Cuenta Ads que se consulta (sin guiones) y la MCC que la administra
   // (sin guiones) — ver login-customer-id en la doc de la Google Ads API.
-  CUSTOMER_ID: '4016982468',
+  // PRUEBA 12/09/2026: la cuenta cliente (4016982468) quedó "CUSTOMER_NOT_ENABLED"
+  // (nunca se terminó de activar con método de pago) — probando con el MCC
+  // (7234711409) como CUSTOMER_ID también, a ver si un Verwaltungskonto
+  // puede correr GenerateKeywordIdeas directamente sin cuenta cliente activa.
+  CUSTOMER_ID: '7234711409',
   LOGIN_CUSTOMER_ID: '7234711409',
 
   // Usuario real al que la cuenta de servicio "impersona" vía Domain-Wide
