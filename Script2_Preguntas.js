@@ -63,36 +63,53 @@ function investigarPreguntasAutocomplete() {
     return;
   }
 
+  const sheet = obtenerOCrearHojaPreguntas_();
+  const yaRegistradas = leerPreguntasYaRegistradas_(sheet); // clave: "pregunta en minúsculas|IDIOMA"
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const preguntasEncontradas = [];
+  const preguntasNuevas = [];
 
   semillas.forEach(semilla => {
     const idiomasAplicables = filtrarIdiomas_(semilla.idiomas);
     idiomasAplicables.forEach(idioma => {
-      const encontradasEnEsteIdioma = []; // tope por semilla+idioma, ver CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA
+      let nuevasEnEsteIdioma = 0; // tope por semilla+idioma, cuenta solo lo genuinamente nuevo
       for (let i = 0; i < idioma.prefijos.length; i++) {
-        if (encontradasEnEsteIdioma.length >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) break;
+        if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) break;
 
         const prefijo = idioma.prefijos[i];
         const partes = [prefijo, semilla.termino, semilla.localizacion].filter(p => p !== '');
         const consulta = partes.join(' ');
         const sugerencias = consultarAutocomplete_(consulta, idioma.hl, idioma.gl);
         sugerencias.forEach(s => {
-          if (encontradasEnEsteIdioma.length >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) return;
-          if (s.toLowerCase().indexOf(semilla.termino.toLowerCase()) !== -1) {
-            encontradasEnEsteIdioma.push(s);
-            preguntasEncontradas.push({
-              pregunta: s, idioma: idioma.codigo,
-              semilla: semilla.termino, localizacion: semilla.localizacion
-            });
-          }
+          if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) return;
+          if (s.toLowerCase().indexOf(semilla.termino.toLowerCase()) === -1) return;
+
+          const clave = s.toLowerCase() + '|' + idioma.codigo;
+          if (yaRegistradas[clave]) return; // ya está en la Hoja (de esta corrida o de una anterior)
+          yaRegistradas[clave] = true;
+
+          nuevasEnEsteIdioma++;
+          preguntasNuevas.push({
+            pregunta: s, idioma: idioma.codigo,
+            semilla: semilla.termino, localizacion: semilla.localizacion
+          });
         });
         Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
       }
     });
   });
 
-  escribirPreguntasNuevas_(preguntasEncontradas, hoy);
+  escribirPreguntasNuevas_(sheet, preguntasNuevas, hoy);
+}
+
+function leerPreguntasYaRegistradas_(sheet) {
+  const numFilas = sheet.getLastRow();
+  const existentes = {};
+  if (numFilas > 1) {
+    sheet.getRange(2, 1, numFilas - 1, 2).getValues().forEach(f => {
+      existentes[f[0].toLowerCase() + '|' + f[1]] = true;
+    });
+  }
+  return existentes;
 }
 
 /**
@@ -129,27 +146,14 @@ function consultarAutocomplete_(consulta, hl, gl) {
 }
 
 /**
- * Agrega a "Preguntas" solo las combinaciones (pregunta + idioma) que no
- * estén ya — si ya existe, no la toca (Estado/Notas son de trabajo
- * manual y nunca se pisan, mismo criterio que actualizarSeguimiento_ en
- * Code.js). El mismo texto puede repetirse en dos idiomas distintos
- * (raro, pero posible) y se registra por separado.
+ * Escribe en "Preguntas" las preguntas ya filtradas como nuevas (el
+ * dedup contra lo ya registrado se hizo antes, en
+ * investigarPreguntasAutocomplete, para que el tope por semilla+idioma
+ * cuente solo lo genuinamente nuevo). Nunca toca Estado/Notas de filas
+ * existentes — mismo criterio que actualizarSeguimiento_ en Code.js.
  */
-function escribirPreguntasNuevas_(preguntasEncontradas, fechaStr) {
-  const sheet = obtenerOCrearHojaPreguntas_();
-  const numFilas = sheet.getLastRow();
-  const existentes = {};
-  if (numFilas > 1) {
-    sheet.getRange(2, 1, numFilas - 1, 2).getValues().forEach(f => {
-      existentes[f[0].toLowerCase() + '|' + f[1]] = true;
-    });
-  }
-
-  preguntasEncontradas.forEach(p => {
-    const clave = p.pregunta.toLowerCase() + '|' + p.idioma;
-    if (existentes[clave]) return;
-    existentes[clave] = true;
-
+function escribirPreguntasNuevas_(sheet, preguntasNuevas, fechaStr) {
+  preguntasNuevas.forEach(p => {
     const filaNueva = sheet.getLastRow() + 1;
     sheet.getRange(filaNueva, 1, 1, 7).setValues([[
       p.pregunta, p.idioma, p.localizacion, p.semilla, fechaStr, 'Pendiente', ''
