@@ -26,7 +26,7 @@ const CONFIG = {
   UMBRAL_IMPRESIONES_ALTAS: 50, // impresiones ≥ esto + CTR bajo = "Oportunidad"
   UMBRAL_IMPRESIONES_BAJAS: 10, // impresiones ≤ esto = "Casi ausente"
 
-  NOMBRE_HOJA_SEGUIMIENTO: 'Seguimiento'
+  NOMBRE_HOJA_SEGUIMIENTO: 'Seguimiento - trafico Real'
 };
 
 /**
