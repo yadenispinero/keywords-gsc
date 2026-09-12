@@ -10,11 +10,20 @@
  * trimestre), no vale la pena meterle una pasada de IA.
  *
  * Multi-idioma (12/09/2026): cada término semilla se consulta en DE/EN/ES
- * — cada idioma con sus propios prefijos de pregunta (no tiene sentido
- * buscar "qué es" en una consulta en inglés) y su propio hl/gl para que
- * el autocompletado devuelva resultados de ese mercado. Como el idioma
- * de cada consulta lo elegimos nosotros (no hay que detectarlo), cada
- * resultado se etiqueta con ese idioma al registrarlo en "Preguntas".
+ * por defecto — cada idioma con sus propios prefijos de pregunta (no
+ * tiene sentido buscar "qué es" en una consulta en inglés) y su propio
+ * hl/gl para que el autocompletado devuelva resultados de ese mercado.
+ * Como el idioma de cada consulta lo elegimos nosotros (no hay que
+ * detectarlo), cada resultado se etiqueta con ese idioma al registrarlo.
+ *
+ * Semillas por idioma/localización (12/09/2026): la pestaña "Semillas"
+ * acepta 2 columnas opcionales además del término — "Idiomas" (ej. "EN"
+ * o "EN,DE"; vacío = los 3) para semillas que solo aplican a un mercado
+ * (ej. "project manager" solo en inglés), y "Localización" (ej. "Berlin")
+ * para acotar la búsqueda a una ciudad/región. El autocompletado de
+ * Google no tiene un parámetro de geolocalización a nivel de ciudad —
+ * la única forma real de acotar es meter el lugar como texto dentro de
+ * la consulta misma (ej. "project manager Berlin").
  */
 const CONFIG_PREGUNTAS = {
   HOJA_SEMILLAS: 'Semillas',
@@ -37,12 +46,14 @@ const CONFIG_PREGUNTAS = {
 };
 
 /**
- * Lee los términos semilla de la pestaña "Semillas" (columna A, desde la
- * fila 2), consulta el autocompletado de Google con cada prefijo de cada
- * idioma en CONFIG_PREGUNTAS.IDIOMAS, descarta lo que no contenga el
- * término semilla (filtro de ruido barato — ver comentario de arriba), y
- * agrega las preguntas nuevas a la pestaña "Preguntas" como "Pendiente",
- * etiquetadas con el idioma de esa consulta.
+ * Lee las semillas de la pestaña "Semillas" (columnas A:C, desde la fila
+ * 2: Término semilla | Idiomas | Localización), consulta el
+ * autocompletado de Google con cada prefijo de cada idioma aplicable
+ * (todos por defecto, o solo los que indique la columna Idiomas),
+ * agregando la Localización a la consulta si está presente. Descarta lo
+ * que no contenga el término semilla (filtro de ruido barato — ver
+ * comentario de arriba) y agrega las preguntas nuevas a "Preguntas" como
+ * "Pendiente", etiquetadas con idioma y localización.
  */
 function investigarPreguntasAutocomplete() {
   const semillas = leerSemillas_();
@@ -55,13 +66,18 @@ function investigarPreguntasAutocomplete() {
   const preguntasEncontradas = [];
 
   semillas.forEach(semilla => {
-    CONFIG_PREGUNTAS.IDIOMAS.forEach(idioma => {
+    const idiomasAplicables = filtrarIdiomas_(semilla.idiomas);
+    idiomasAplicables.forEach(idioma => {
       idioma.prefijos.forEach(prefijo => {
-        const consulta = prefijo ? (prefijo + ' ' + semilla) : semilla;
+        const partes = [prefijo, semilla.termino, semilla.localizacion].filter(p => p !== '');
+        const consulta = partes.join(' ');
         const sugerencias = consultarAutocomplete_(consulta, idioma.hl, idioma.gl);
         sugerencias.forEach(s => {
-          if (s.toLowerCase().indexOf(semilla.toLowerCase()) !== -1) {
-            preguntasEncontradas.push({ pregunta: s, idioma: idioma.codigo, semilla: semilla });
+          if (s.toLowerCase().indexOf(semilla.termino.toLowerCase()) !== -1) {
+            preguntasEncontradas.push({
+              pregunta: s, idioma: idioma.codigo,
+              semilla: semilla.termino, localizacion: semilla.localizacion
+            });
           }
         });
         Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
@@ -72,14 +88,28 @@ function investigarPreguntasAutocomplete() {
   escribirPreguntasNuevas_(preguntasEncontradas, hoy);
 }
 
+/**
+ * "" (vacío en la columna Idiomas) -> los 3 idiomas de CONFIG_PREGUNTAS.
+ * "EN" o "EN,DE" -> solo esos, por código (case-insensitive).
+ */
+function filtrarIdiomas_(idiomasTexto) {
+  if (!idiomasTexto) return CONFIG_PREGUNTAS.IDIOMAS;
+  const codigos = idiomasTexto.split(',').map(c => c.trim().toUpperCase()).filter(c => c !== '');
+  return CONFIG_PREGUNTAS.IDIOMAS.filter(idioma => codigos.indexOf(idioma.codigo) !== -1);
+}
+
 function leerSemillas_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_PREGUNTAS.HOJA_SEMILLAS);
   if (!sheet) return [];
   const numFilas = sheet.getLastRow();
   if (numFilas < 2) return [];
-  return sheet.getRange(2, 1, numFilas - 1, 1).getValues()
-    .map(f => f[0])
-    .filter(v => v !== '');
+  return sheet.getRange(2, 1, numFilas - 1, 3).getValues()
+    .filter(f => f[0] !== '')
+    .map(f => ({
+      termino: f[0],
+      idiomas: (f[1] || '').toString(),
+      localizacion: (f[2] || '').toString()
+    }));
 }
 
 function consultarAutocomplete_(consulta, hl, gl) {
@@ -114,10 +144,10 @@ function escribirPreguntasNuevas_(preguntasEncontradas, fechaStr) {
     existentes[clave] = true;
 
     const filaNueva = sheet.getLastRow() + 1;
-    sheet.getRange(filaNueva, 1, 1, 6).setValues([[
-      p.pregunta, p.idioma, p.semilla, fechaStr, 'Pendiente', ''
+    sheet.getRange(filaNueva, 1, 1, 7).setValues([[
+      p.pregunta, p.idioma, p.localizacion, p.semilla, fechaStr, 'Pendiente', ''
     ]]);
-    aplicarValidacionEstado_(sheet, filaNueva, 1, 5);
+    aplicarValidacionEstado_(sheet, filaNueva, 1, 6);
   });
 }
 
@@ -127,9 +157,9 @@ function obtenerOCrearHojaPreguntas_() {
   if (sheet) return sheet;
 
   sheet = ss.insertSheet(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
-  sheet.appendRow(['Pregunta', 'Idioma', 'Término semilla', 'Fecha detectada', 'Estado', 'Notas']);
-  sheet.getRange(1, 1, 1, 6).setFontWeight('bold');
+  sheet.appendRow(['Pregunta', 'Idioma', 'Localización', 'Término semilla', 'Fecha detectada', 'Estado', 'Notas']);
+  sheet.getRange(1, 1, 1, 7).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 6);
+  sheet.autoResizeColumns(1, 7);
   return sheet;
 }
