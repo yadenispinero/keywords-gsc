@@ -1,0 +1,11 @@
+# Credenciales de clasp (nunca subir)
+.clasprc.json
+**/.clasprc.json
+
+# .clasp.json real generado por `clasp clone` (contiene el scriptId real)
+# — se deja solo el .example como plantilla
+.clasp.json
+
+node_modules/
+*.log
+.DS_Store
