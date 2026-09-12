@@ -79,7 +79,7 @@ function investigarPreguntasAutocomplete() {
         const partes = [prefijo, semilla.termino, semilla.localizacion].filter(p => p !== '');
         const consulta = partes.join(' ');
         const sugerencias = consultarAutocomplete_(consulta, idioma.hl, idioma.gl);
-        sugerencias.forEach(s => {
+        sugerencias.forEach((s, indice) => {
           if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) return;
           if (s.toLowerCase().indexOf(semilla.termino.toLowerCase()) === -1) return;
 
@@ -89,7 +89,7 @@ function investigarPreguntasAutocomplete() {
 
           nuevasEnEsteIdioma++;
           preguntasNuevas.push({
-            pregunta: s, idioma: idioma.codigo,
+            pregunta: s, idioma: idioma.codigo, posicion: indice + 1,
             semilla: semilla.termino, localizacion: semilla.localizacion
           });
         });
@@ -151,14 +151,19 @@ function consultarAutocomplete_(consulta, hl, gl) {
  * investigarPreguntasAutocomplete, para que el tope por semilla+idioma
  * cuente solo lo genuinamente nuevo). Nunca toca Estado/Notas de filas
  * existentes — mismo criterio que actualizarSeguimiento_ en Code.js.
+ *
+ * "Posición autocompletado": el índice (1, 2, 3...) en que Google devolvió
+ * esa sugerencia para esa consulta — es la única señal de popularidad
+ * relativa que da este endpoint (no expone volumen real). Cuanto más
+ * bajo el número, más arriba la puso Google.
  */
 function escribirPreguntasNuevas_(sheet, preguntasNuevas, fechaStr) {
   preguntasNuevas.forEach(p => {
     const filaNueva = sheet.getLastRow() + 1;
-    sheet.getRange(filaNueva, 1, 1, 7).setValues([[
-      p.pregunta, p.idioma, p.localizacion, p.semilla, fechaStr, 'Pendiente', ''
+    sheet.getRange(filaNueva, 1, 1, 8).setValues([[
+      p.pregunta, p.idioma, p.posicion, p.localizacion, p.semilla, fechaStr, 'Pendiente', ''
     ]]);
-    aplicarValidacionEstado_(sheet, filaNueva, 1, 6);
+    aplicarValidacionEstado_(sheet, filaNueva, 1, 7);
   });
 }
 
@@ -168,9 +173,9 @@ function obtenerOCrearHojaPreguntas_() {
   if (sheet) return sheet;
 
   sheet = ss.insertSheet(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
-  sheet.appendRow(['Pregunta', 'Idioma', 'Localización', 'Término semilla', 'Fecha detectada', 'Estado', 'Notas']);
-  sheet.getRange(1, 1, 1, 7).setFontWeight('bold');
+  sheet.appendRow(['Pregunta', 'Idioma', 'Posición autocompletado', 'Localización', 'Término semilla', 'Fecha detectada', 'Estado', 'Notas']);
+  sheet.getRange(1, 1, 1, 8).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 7);
+  sheet.autoResizeColumns(1, 8);
   return sheet;
 }
