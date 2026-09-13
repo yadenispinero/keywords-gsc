@@ -18,7 +18,7 @@ arquitectura y el flujo de trabajo.
 ## 1. Crear la Hoja de cálculo y el proyecto de Apps Script
 
 1. Crear una Hoja de cálculo nueva en Drive (ej. "Keywords GSC —
-   yfokus.de" o el nombre de la empresa que corresponda).
+   tudominio.de" o el nombre de la empresa que corresponda).
 2. Extensiones → Apps Script. Esto crea el proyecto de Apps Script
    vinculado (contenedor) y te da su Script ID.
 3. En el editor: ⚙️ Configuración del proyecto → copiar el "ID del
@@ -118,7 +118,7 @@ sensible — nunca debe subirse.
 
 ## Reutilizar para otra empresa/sitio
 
-Este script está pensado para no ser exclusivo de Yfokus:
+Este script está pensado para no ser exclusivo de una sola empresa:
 
 - Crear una Hoja de cálculo y proyecto de Apps Script nuevos (pasos 1–6)
   para la otra empresa.

@@ -6,7 +6,7 @@ keywords": trae consultas de la Search Console API, las clasifica por
 oportunidad, y las deja en una hoja de trabajo con seguimiento manual.
 
 Proyecto genérico — pensado para reutilizarse con cualquier sitio/
-empresa, no solo Yfokus. Todo lo específico de un sitio (URL de la
+empresa. Todo lo específico de un sitio (URL de la
 propiedad, umbrales) vive en el objeto `CONFIG` al inicio de `Code.js`;
 para usarlo con otra empresa, se clona el script (o se ajusta `CONFIG`)
 y se apunta a otra Hoja de cálculo — no se toca el resto del código.
@@ -34,8 +34,7 @@ aquí, a diferencia de los proyectos de `sistema-busqueda-empleo`.
 `consultarSearchConsole_()` llama la API por REST directo
 (`UrlFetchApp` + `ScriptApp.getOAuthToken()`), no vía el servicio
 avanzado "Search Console API"/"Webmasters" del picker del editor de
-Apps Script. Motivo: en la cuenta de prueba (admin@yfokus.de,
-12/09/2026) esa opción no aparecía en el listado de servicios avanzados
+Apps Script. Motivo: en la cuenta de prueba (12/09/2026) esa opción no aparecía en el listado de servicios avanzados
 del editor pese a probar ambos nombres — Google ha ido recortando ese
 catálogo. El scope `webmasters.readonly` en `appsscript.json` es
 suficiente sin necesidad de tocar nada en el editor ni en la consola de
@@ -64,9 +63,9 @@ Mismo patrón que el resto de mis proyectos Apps Script:
 
 ## Pendientes / decisiones abiertas
 1. Sin verificar aún en corrida real contra la propiedad de Search
-   Console de yfokus.de (falta habilitar el servicio avanzado y
+   Console del sitio configurado (falta habilitar el servicio avanzado y
    autorizar el script la primera vez desde el editor).
-2. Cierre del ciclo (Seguimiento → `anexo-keywords-y-entidades.md` del
-   proyecto "Promocion yfokus") queda fuera de este repo por ahora — es
+2. Cierre del ciclo (Seguimiento → anexo de keywords y entidades del
+   proyecto de promoción) queda fuera de este repo por ahora — es
    trabajo de una sesión de Claude con acceso a Drive/Sheets, no de este
    script.

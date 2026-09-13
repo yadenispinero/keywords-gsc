@@ -6,16 +6,16 @@
 const CONFIG = {
   // Debe coincidir EXACTO con la propiedad verificada en Search Console.
   // Dos formatos posibles según cómo esté verificada la propiedad:
-  //   - Propiedad de DOMINIO (ícono de globo, ej. "yfokus.de"):
-  //     usar 'sc-domain:yfokus.de' (con ese prefijo literal).
-  //   - Propiedad de PREFIJO DE URL (ej. "https://www.yfokus.de/"):
+  //   - Propiedad de DOMINIO (ícono de globo, ej. "tudominio.de"):
+  //     usar 'sc-domain:tudominio.de' (con ese prefijo literal).
+  //   - Propiedad de PREFIJO DE URL (ej. "https://www.tudominio.de/"):
   //     usar la URL completa tal cual aparece en Search Console.
-  // yfokus.de está verificada como propiedad de DOMINIO (confirmado
-  // 12/09/2026 en search.google.com/search-console → selector de
-  // propiedades) — con la URL de prefijo la API daba 403 "User does not
-  // have sufficient permission for site" pese a que admin@yfokus.de sí
-  // es Inhaber, porque el identificador no coincidía con ninguna
-  // propiedad real.
+  // El sitio configurado está verificado como propiedad de DOMINIO
+  // (confirmado 12/09/2026 en search.google.com/search-console →
+  // selector de propiedades) — con la URL de prefijo la API daba 403
+  // "User does not have sufficient permission for site" pese a que la
+  // cuenta usada sí es Inhaber, porque el identificador no coincidía con
+  // ninguna propiedad real.
   SITE_URL: 'sc-domain:yfokus.de',
 
   DIAS_ATRAS: 90,               // ventana de datos a traer de la API
@@ -139,7 +139,7 @@ function redondearPosicion_(position) {
 }
 
 /**
- * Columnas de Seguimiento (reordenado 12/09/2026 a pedido de Yadenis, y
+ * Columnas de Seguimiento (reordenado 12/09/2026 a pedido del usuario, y
  * de nuevo el mismo día para absorber lo que era la pestaña "Competencia"
  * — se eliminó esa pestaña separada porque toda keyword que se evaluaba
  * ahí ya vivía en Seguimiento/Preguntas, era redundante):
@@ -150,7 +150,7 @@ function redondearPosicion_(position) {
  * Notas (fórmula, columna N). Acción propuesta y Notas son fórmulas que
  * se recalculan solas — el script nunca las toca en filas existentes.
  * Notas arranca con la Description de esa Acción propuesta (VLOOKUP
- * contra Data!A:B); si Yadenis escribe texto a mano encima, esa celda
+ * contra Data!A:B); si se escribe texto a mano encima, esa celda
  * puntual deja de ser fórmula y queda su nota manual — el resto sigue
  * actualizándose solo. Volumen mensual, Top 10 dominios, Fecha evaluación
  * competencia, Acción sugerida y Estado son 100% manuales (Paso 3/4). Si
@@ -236,7 +236,7 @@ function formulaNotas_(fila) {
 /**
  * Crea (si no existe) las dos tablas de Data que usa el script: Estados
  * (A:B, para el dropdown de Estado) y Reglas de Acción propuesta (D:J,
- * para la fórmula de arriba). Idempotente — si Yadenis ya las armó a
+ * para la fórmula de arriba). Idempotente — si ya se armaron a
  * mano (o las trae de una corrida anterior), no las toca. Sirve para que
  * el script quede autocontenido al reutilizarlo en un sitio/empresa
  * nueva sin tener que armar las tablas de Data a mano desde cero.
@@ -302,9 +302,9 @@ function aplicarValidacionEstado_(sheet, filaInicio, numFilas, columna) {
 
 /**
  * Dropdown de "Acción sugerida (competencia)" — validado contra la lista
- * corta que Yadenis armó a mano en Data!A13:A14 ("competir de frente" /
+ * corta armada a mano en Data!A13:A14 ("competir de frente" /
  * "buscar long-tail"), distinta del dropdown general de Estado. Si esa
- * lista no está ahí (sitio nuevo, o Yadenis la movió), no falla — solo
+ * lista no está ahí (sitio nuevo, o se movió), no falla — solo
  * no aplica validación.
  */
 function aplicarValidacionAccionCompetencia_(sheet, filaInicio, numFilas, columna) {
@@ -341,7 +341,7 @@ function obtenerOCrearHojaSeguimiento_() {
 
 /**
  * ÚNICA VEZ (12/09/2026): aplica a las keywords ya detectadas hoy el
- * juicio manual que Yadenis dio en el chat (typo de marca, candidata de
+ * juicio manual dado en el chat (typo de marca, candidata de
  * schema, ya cubierta en otro cluster, etc.) — no es lógica genérica
  * reutilizable, por eso va hardcodeado por texto exacto de keyword.
  * Correr DESPUÉS de recrear la pestaña Seguimiento desde cero (eliminarla

@@ -25,7 +25,7 @@ Paso 4: Competencia                      ──┘
 
 `exportarKeywordsGSC()` consulta la Search Console API (REST directa vía
 `UrlFetchApp` + `ScriptApp.getOAuthToken()`, propiedad de dominio
-`sc-domain:yfokus.de`) y vuelca a la pestaña **"Seguimiento - trafico
+configurada en `CONFIG.SITE_URL`) y vuelca a la pestaña **"Seguimiento - trafico
 Real"** las keywords con impresiones/CTR/posición reales, calcula una
 **Acción propuesta** por fórmula (ej. "optimizar meta description",
 "mejorar contenido") y arranca el ciclo de seguimiento por Estado. Corre
@@ -44,7 +44,7 @@ IDIOMAS`), y vuelca resultados a la pestaña **"Preguntas"** con dedup
 contra lo ya detectado. Reemplaza a AlsoAsked (herramienta de pago)
 sin costo y sin límite de tasa práctico.
 
-Cada pregunta nueva arranca sin Estado (o "Nueva") y Yadenis la mueve a
+Cada pregunta nueva arranca sin Estado (o "Nueva") y se mueve a
 mano por el ciclo: revisión → **Priorizada** (vale la pena crear
 contenido) o descartada.
 
@@ -59,7 +59,7 @@ Intentado con la Google Ads API (`GenerateKeywordIdeas`). Bloqueado:
   (cuenta de servicio + Domain-Wide Delegation vía Workspace Admin), pero
   quedó inútil al toparse con el muro de nivel de acceso.
 
-Decisión de Yadenis: abandonar y eliminar `Script3_KeywordPlanner.js` por
+Decisión tomada: abandonar y eliminar `Script3_KeywordPlanner.js` por
 completo (borrado del repo y del editor de Apps Script) en vez de
 perseguir la verificación de marca.
 
@@ -92,7 +92,7 @@ toma las preguntas en Estado **"Priorizada"** (Paso 2) que no estén ya en
 el banco, y agrega una fila mínima a la pestaña `Consultoria` del proyecto
 `Publicaciones-Plan-Promocion` (Hoja "Plan Promocion", por ID — proyectos
 de Apps Script distintos). Ubica columnas por **encabezado**, no por
-posición fija, para sobrevivir a que Yadenis reordene `Consultoria`.
+posición fija, para sobrevivir a reordenamientos de `Consultoria`.
 Solo rellena `Tema` + los valores por defecto de `Estrategia`/`Espacio`/
 `Canales` (`CONFIG_BANCO.VALORES_POR_DEFECTO`) — el resto queda vacío a
 propósito, es trabajo editorial o se busca en vivo desde `Nomencladores`

@@ -14,7 +14,7 @@
  * Estrategia de marketing / Espacios / Canales) — si cambian esos
  * catálogos, actualizar aquí a mano.
  *
- * FIX 12/09/2026: "Consultoria" cambia de estructura seguido (Yadenis le
+ * FIX 12/09/2026: "Consultoria" cambia de estructura seguido (se le
  * agrega/reordena columnas — Tipo de publicación, Idioma, Link text
  * fuente, etc.). Antes este script escribía por POSICIÓN fija
  * (COLUMNAS_BANCO, un array de 18 columnas) — cualquier reordenamiento
@@ -23,7 +23,7 @@
  * reordenamientos futuros sin tocar este código.
  *
  * El resto de columnas (Contenido base, Enfoque, Tono, etc.) quedan
- * vacías a propósito — es trabajo editorial de Yadenis, o se busca en
+ * vacías a propósito — es trabajo editorial manual, o se busca en
  * vivo desde Nomencladores por el generador (no se duplica aquí).
  */
 const CONFIG_BANCO = {

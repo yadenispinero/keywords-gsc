@@ -159,7 +159,7 @@ function consultarAutocomplete_(consulta, hl, gl) {
  *
  * "Volumen mensual (Keyword Surfer)", "Top 10 dominios (Paso 4)", "Fecha
  * evaluación competencia" y "Acción sugerida (competencia)" (12/09/2026):
- * columnas manuales de Paso 3/4 — se dejan vacías aquí, Yadenis las
+ * columnas manuales de Paso 3/4 — se dejan vacías aquí, se
  * rellena a mano (ver tareas #93/#94). Absorben lo que antes era la
  * pestaña "Competencia" separada, eliminada por redundante.
  */
