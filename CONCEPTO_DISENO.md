@@ -25,7 +25,7 @@ Paso 4: Competencia                      ──┘
 
 `exportarKeywordsGSC()` consulta la Search Console API (REST directa vía
 `UrlFetchApp` + `ScriptApp.getOAuthToken()`, propiedad de dominio
-configurada en `CONFIG.SITE_URL`) y vuelca a la pestaña **"Seguimiento - trafico
+configurada en la Script Property `SITE_URL`) y vuelca a la pestaña **"Seguimiento - trafico
 Real"** las keywords con impresiones/CTR/posición reales, calcula una
 **Acción propuesta** por fórmula (ej. "optimizar meta description",
 "mejorar contenido") y arranca el ciclo de seguimiento por Estado. Corre
@@ -94,12 +94,14 @@ el banco, y agrega una fila mínima a la pestaña `Consultoria` del proyecto
 de Apps Script distintos). Ubica columnas por **encabezado**, no por
 posición fija, para sobrevivir a reordenamientos de `Consultoria`.
 Solo rellena `Tema` + los valores por defecto de `Estrategia`/`Espacio`/
-`Canales` (`CONFIG_BANCO.VALORES_POR_DEFECTO`) — el resto queda vacío a
-propósito, es trabajo editorial o se busca en vivo desde `Nomencladores`
-por el generador (ver `CONCEPTO_DISENO.md` del otro repo).
+`Canales` (Script Properties `DEFAULT_ESTRATEGIA`/`DEFAULT_ESPACIO`/
+`DEFAULT_CANALES`) — el resto queda vacío a propósito, es trabajo
+editorial o se busca en vivo desde `Nomencladores` por el generador (ver
+`CONCEPTO_DISENO.md` del otro repo).
 
-Envía además un correo resumen (`EMAIL_RESUMEN`) con lo agregado y el
-total de filas por Estado combinando "Seguimiento" + "Preguntas".
+Envía además un correo resumen (destino: Script Property `EMAIL_RESUMEN`)
+con lo agregado y el total de filas por Estado combinando "Seguimiento" +
+"Preguntas".
 
 ## Decisiones de diseño explícitas (no cambiar sin volver a preguntar)
 

@@ -1,23 +1,15 @@
 /**
  * === CONFIGURACIÓN (ajustar por sitio/empresa antes de correr) ===
- * Todo lo que cambia entre empresas vive aquí — el resto del script es
- * genérico y no debería tocarse al reutilizarlo para otro sitio.
+ * Los parámetros ajustables genéricos (ventana de días, umbrales, nombre
+ * de pestaña) viven aquí. El dato que identifica la instalación concreta
+ * (la propiedad de Search Console a consultar) NO vive en el código —
+ * vive en Script Properties (⚙️ Configuración del proyecto → Script
+ * Properties, en el editor de Apps Script) como `SITE_URL`, leído por
+ * `siteUrl_()`. Así este archivo queda genérico para cualquier sitio/
+ * empresa sin tocar una sola línea al reutilizarlo — solo se configura
+ * la propiedad en la instalación de destino.
  */
 const CONFIG = {
-  // Debe coincidir EXACTO con la propiedad verificada en Search Console.
-  // Dos formatos posibles según cómo esté verificada la propiedad:
-  //   - Propiedad de DOMINIO (ícono de globo, ej. "tudominio.de"):
-  //     usar 'sc-domain:tudominio.de' (con ese prefijo literal).
-  //   - Propiedad de PREFIJO DE URL (ej. "https://www.tudominio.de/"):
-  //     usar la URL completa tal cual aparece en Search Console.
-  // El sitio configurado está verificado como propiedad de DOMINIO
-  // (confirmado 12/09/2026 en search.google.com/search-console →
-  // selector de propiedades) — con la URL de prefijo la API daba 403
-  // "User does not have sufficient permission for site" pese a que la
-  // cuenta usada sí es Inhaber, porque el identificador no coincidía con
-  // ninguna propiedad real.
-  SITE_URL: 'sc-domain:yfokus.de',
-
   DIAS_ATRAS: 90,               // ventana de datos a traer de la API
   ROW_LIMIT_API: 1000,          // máximo de filas a pedir a la API (límite de Google: 25000)
   TOP_N: 30,                    // cuántas keywords quedan en la pestaña del día
@@ -28,6 +20,29 @@ const CONFIG = {
 
   NOMBRE_HOJA_SEGUIMIENTO: 'Seguimiento - trafico Real'
 };
+
+/**
+ * Lee la propiedad de Search Console a consultar desde Script Properties.
+ * Debe coincidir EXACTO con la propiedad verificada en Search Console.
+ * Dos formatos posibles según cómo esté verificada la propiedad:
+ *   - Propiedad de DOMINIO (ícono de globo, ej. "tudominio.de"):
+ *     usar 'sc-domain:tudominio.de' (con ese prefijo literal).
+ *   - Propiedad de PREFIJO DE URL (ej. "https://www.tudominio.de/"):
+ *     usar la URL completa tal cual aparece en Search Console.
+ * Nota (12/09/2026): con la URL de prefijo la API daba 403 "User does not
+ * have sufficient permission for site" pese a tener acceso de Inhaber,
+ * porque el identificador no coincidía con ninguna propiedad real —
+ * verificar el formato exacto en el selector de propiedades de Search
+ * Console antes de configurar esta propiedad.
+ */
+function siteUrl_() {
+  const valor = PropertiesService.getScriptProperties().getProperty('SITE_URL');
+  if (!valor) {
+    throw new Error('Falta configurar la Script Property "SITE_URL" (⚙️ Configuración del '
+      + 'proyecto → Script Properties) con la propiedad de Search Console a consultar.');
+  }
+  return valor;
+}
 
 /**
  * Trae las consultas de los últimos CONFIG.DIAS_ATRAS días desde la Search
@@ -89,7 +104,7 @@ function exportarKeywordsGSC() {
  */
 function consultarSearchConsole_(request) {
   const url = 'https://www.googleapis.com/webmasters/v3/sites/'
-    + encodeURIComponent(CONFIG.SITE_URL) + '/searchAnalytics/query';
+    + encodeURIComponent(siteUrl_()) + '/searchAnalytics/query';
 
   const httpResponse = UrlFetchApp.fetch(url, {
     method: 'post',

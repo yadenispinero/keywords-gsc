@@ -6,10 +6,14 @@ keywords": trae consultas de la Search Console API, las clasifica por
 oportunidad, y las deja en una hoja de trabajo con seguimiento manual.
 
 Proyecto genérico — pensado para reutilizarse con cualquier sitio/
-empresa. Todo lo específico de un sitio (URL de la
-propiedad, umbrales) vive en el objeto `CONFIG` al inicio de `Code.js`;
-para usarlo con otra empresa, se clona el script (o se ajusta `CONFIG`)
-y se apunta a otra Hoja de cálculo — no se toca el resto del código.
+empresa. Los parámetros ajustables genéricos (umbrales, ventana de días)
+viven en el objeto `CONFIG` al inicio de `Code.js`; los datos que
+identifican la instalación concreta (dominio de Search Console, email de
+resumen, valores por defecto del banco de contenido) NO viven en el
+código — viven en **Script Properties** (ver sección abajo). Para usarlo
+con otra empresa: se clona el script, se configuran sus Script
+Properties, y se apunta a otra Hoja de cálculo — no se toca ni una línea
+de código.
 
 ## Arquitectura
 - Proyecto de un solo archivo de lógica (`Code.js`) — no aplica todavía
@@ -40,13 +44,31 @@ catálogo. El scope `webmasters.readonly` en `appsscript.json` es
 suficiente sin necesidad de tocar nada en el editor ni en la consola de
 GCP.
 
+## Script Properties (por instalación — nunca en el código)
+Configurar en ⚙️ Configuración del proyecto → Script Properties, en el
+editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
+`Script5_BancoContenido.js`):
+
+- `SITE_URL` (usado por `siteUrl_()` en `Code.js`) — la propiedad de
+  Search Console a consultar. Debe coincidir EXACTO con cómo está
+  verificada en Search Console (dominio `sc-domain:...` vs. prefijo URL,
+  con/sin barra final) — si no coincide, la API devuelve error o 0 filas.
+- `EMAIL_RESUMEN` (usado por `emailResumenBanco_()` en
+  `Script5_BancoContenido.js`) — correo destino del resumen de cada
+  corrida.
+- `DEFAULT_ESPACIO`, `DEFAULT_CANALES` (usados por
+  `valoresPorDefectoBanco_()` en `Script5_BancoContenido.js`) — valores
+  por defecto al crear una fila nueva en el banco de contenido; deben
+  coincidir literalmente con los catálogos de la pestaña de nomencladores
+  del banco de contenido. Si falta alguna, esa columna queda vacía (no es
+  un error fatal, a diferencia de `SITE_URL`/`EMAIL_RESUMEN`). El default
+  de `Estrategia` NO es Script Property — no identifica ninguna empresa,
+  vive en `CONFIG_BANCO.DEFAULT_ESTRATEGIA` dentro del código.
+
 ## Configuración manual necesaria (no automatizable por Claude Code)
 - El proyecto debe estar autorizado con una cuenta de Google que tenga
   acceso de al menos "Restringido" o superior a la propiedad de Search
-  Console del sitio en `CONFIG.SITE_URL`.
-- Verificar que `CONFIG.SITE_URL` coincide EXACTO con cómo está verificada
-  la propiedad en Search Console (dominio vs. prefijo URL, con/sin barra
-  final) — si no coincide, la API devuelve error o 0 filas.
+  Console del sitio en `SITE_URL`.
 - Correr `configurarTriggerMensual()` una vez a mano desde el editor de
   Apps Script para activar el trigger de tiempo. Cambiar la periodicidad
   (mensual/trimestral) requiere editar esa función.

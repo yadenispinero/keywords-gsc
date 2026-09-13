@@ -63,13 +63,17 @@ El script llama la Search Console API directamente por REST
 Search Console/Webmasters de forma confiable. `appsscript.json` ya trae
 el scope `webmasters.readonly` necesario; con `clasp push` alcanza.
 
-## 7. Ajustar `CONFIG` en `Code.js`
+## 7. Configurar Script Properties y ajustar `CONFIG`
 
-Como mínimo, `SITE_URL` debe coincidir EXACTO con la propiedad
-verificada en Search Console. Los umbrales (`UMBRAL_CTR_BAJO`,
-`UMBRAL_IMPRESIONES_ALTAS`, `UMBRAL_IMPRESIONES_BAJAS`), la ventana de
-días (`DIAS_ATRAS`) y el top a exportar (`TOP_N`) son ajustables ahí
-mismo.
+En el editor de Apps Script: ⚙️ Configuración del proyecto → Script
+Properties → agregar `SITE_URL` con el valor EXACTO de la propiedad
+verificada en Search Console (ver `CLAUDE.md` para el formato correcto).
+Sin esto, `exportarKeywordsGSC()` falla con un error explícito.
+
+Los umbrales (`UMBRAL_CTR_BAJO`, `UMBRAL_IMPRESIONES_ALTAS`,
+`UMBRAL_IMPRESIONES_BAJAS`), la ventana de días (`DIAS_ATRAS`) y el top a
+exportar (`TOP_N`) son genéricos y se ajustan directo en el objeto
+`CONFIG` de `Code.js`.
 
 ## 8. Primera corrida y autorización
 
@@ -122,8 +126,10 @@ Este script está pensado para no ser exclusivo de una sola empresa:
 
 - Crear una Hoja de cálculo y proyecto de Apps Script nuevos (pasos 1–6)
   para la otra empresa.
-- Copiar `Code.js` y `appsscript.json` de este repo tal cual.
-- Ajustar solo `CONFIG.SITE_URL` (y umbrales si aplica) al nuevo sitio.
+- Copiar `Code.js` y `appsscript.json` de este repo tal cual, sin editar
+  nada.
+- Configurar la Script Property `SITE_URL` del nuevo proyecto (paso 7) y
+  ajustar umbrales en `CONFIG` si aplica.
 - Repetir pasos 8–9 (autorizar, correr una vez, activar el trigger).
 
 Si en el futuro se gestionan varias empresas desde este mismo repo, se

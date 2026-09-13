@@ -9,10 +9,15 @@
  * página rankeando en Search Console, su ruta es optimizar lo existente
  * (tarea [A.3]), no crear contenido nuevo.
  *
- * Estrategia/Espacio/Canales por defecto: tomados literalmente de la
- * pestaña de nomencladores del banco de contenido (columnas Tipo de
- * Estrategia de marketing / Espacios / Canales) — si cambian esos
- * catálogos, actualizar aquí a mano.
+ * Espacio/Canales por defecto (los valores que sí rellenamos al crear una
+ * fila nueva) y el email de resumen NO viven en el código — identifican
+ * la instalación concreta, viven en Script Properties (⚙️ Configuración
+ * del proyecto → Script Properties): `DEFAULT_ESPACIO`, `DEFAULT_CANALES`,
+ * `EMAIL_RESUMEN`. Deben coincidir literalmente con los catálogos de la
+ * pestaña de nomencladores del banco de contenido (columnas Espacios /
+ * Canales) — si cambian esos catálogos, actualizar la Script Property.
+ * `Estrategia` por defecto sí queda en `CONFIG_BANCO` — no identifica
+ * ninguna empresa, es solo una categoría del embudo de contenido.
  *
  * FIX 12/09/2026: "Consultoria" cambia de estructura seguido (se le
  * agrega/reordena columnas — Tipo de publicación, Idioma, Link text
@@ -30,17 +35,36 @@ const CONFIG_BANCO = {
   SPREADSHEET_ID: '1vFLUuk3X0p_ldBnSuD1gs0zjTFaw6xPIidMcWXW8cJ0', // "Plan Promocion"
   HOJA_BANCO: 'Consultoria',
 
-  // Encabezado → valor por defecto para las columnas que sí rellenamos
-  // al crear una fila nueva. Cualquier columna de "Consultoria" que no
-  // aparezca aquí (ni sea "Tema") queda vacía.
-  VALORES_POR_DEFECTO: {
-    'Estrategia': '02. Contenidos TOFU',
-    'Espacio': 'Página Web merchise: Blog',
-    'Canales': 'Linkedin Yfokus.de'
-  },
-
-  EMAIL_RESUMEN: 'yadenis@yfokus.de'
+  // No identifica ninguna empresa — solo la categoría de embudo por
+  // defecto para contenido nuevo. Ajustar aquí si cambia el catálogo de
+  // Estrategia en Nomencladores.
+  DEFAULT_ESTRATEGIA: '02. Contenidos TOFU'
 };
+
+/**
+ * Encabezado → valor por defecto para las columnas que sí rellenamos al
+ * crear una fila nueva. Espacio/Canales vienen de Script Properties (son
+ * específicos de la empresa); Estrategia viene de `CONFIG_BANCO`. Cualquier
+ * columna de "Consultoria" que no tenga valor configurado (ni sea "Tema")
+ * queda vacía — no es un error, solo faltaría rellenarla a mano.
+ */
+function valoresPorDefectoBanco_() {
+  const props = PropertiesService.getScriptProperties();
+  return {
+    'Estrategia': CONFIG_BANCO.DEFAULT_ESTRATEGIA,
+    'Espacio': props.getProperty('DEFAULT_ESPACIO') || '',
+    'Canales': props.getProperty('DEFAULT_CANALES') || ''
+  };
+}
+
+function emailResumenBanco_() {
+  const valor = PropertiesService.getScriptProperties().getProperty('EMAIL_RESUMEN');
+  if (!valor) {
+    throw new Error('Falta configurar la Script Property "EMAIL_RESUMEN" (⚙️ Configuración del '
+      + 'proyecto → Script Properties) con el correo destino del resumen.');
+  }
+  return valor;
+}
 
 /**
  * Función principal: agrega al banco de contenido las preguntas nuevas
@@ -56,7 +80,7 @@ function publicarPriorizadasEnBancoDeContenido() {
     temasNuevos.forEach(t => Logger.log('  - ' + t));
   }
   enviarResumenPorCorreo_(temasNuevos);
-  Logger.log('Correo resumen enviado a ' + CONFIG_BANCO.EMAIL_RESUMEN + '.');
+  Logger.log('Correo resumen enviado a ' + emailResumenBanco_() + '.');
 }
 
 function agregarPriorizadasAlBanco_() {
@@ -97,11 +121,12 @@ function agregarPriorizadasAlBanco_() {
     temasNuevos.push(pregunta);
   });
 
+  const valoresPorDefecto = valoresPorDefectoBanco_();
   temasNuevos.forEach(tema => {
     const filaNueva = bancoSheet.getLastRow() + 1;
     const valores = headers.map(h => {
       if (h === 'Tema') return tema;
-      return CONFIG_BANCO.VALORES_POR_DEFECTO[h] !== undefined ? CONFIG_BANCO.VALORES_POR_DEFECTO[h] : '';
+      return valoresPorDefecto[h] !== undefined ? valoresPorDefecto[h] : '';
     });
     bancoSheet.getRange(filaNueva, 1, 1, valores.length).setValues([valores]);
   });
@@ -149,7 +174,7 @@ function enviarResumenPorCorreo_(temasNuevos) {
   });
 
   MailApp.sendEmail({
-    to: CONFIG_BANCO.EMAIL_RESUMEN,
+    to: emailResumenBanco_(),
     subject: 'Keywords GSC — resumen ' + hoy,
     body: cuerpo
   });
