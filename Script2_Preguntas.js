@@ -70,21 +70,32 @@ function investigarPreguntasAutocomplete() {
 
   semillas.forEach(semilla => {
     const idiomasAplicables = filtrarIdiomas_(semilla.idiomas);
+    const palabrasSemilla = palabrasClaveSemilla_(semilla.termino);
     idiomasAplicables.forEach(idioma => {
       let nuevasEnEsteIdioma = 0; // tope por semilla+idioma, cuenta solo lo genuinamente nuevo
       for (let i = 0; i < idioma.prefijos.length; i++) {
         if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) break;
 
         const prefijo = idioma.prefijos[i];
-        const partes = [prefijo, semilla.termino, semilla.localizacion].filter(p => p !== '');
-        const consulta = partes.join(' ');
-        const sugerencias = consultarAutocomplete_(consulta, idioma.hl, idioma.gl);
+        let localizacionUsada = semilla.localizacion;
+        let sugerencias = consultarAutocomplete_(
+          [prefijo, semilla.termino, localizacionUsada].filter(p => p !== '').join(' '), idioma.hl, idioma.gl);
+        // FIX 02/10/2026: con la Localización agregada (ej. "qué es
+        // consultoria Odoo Berlin") el autocompletado casi siempre devuelve
+        // [] -- nadie busca así. Si pasa, se reintenta sin Localización, y
+        // la fila queda con Localización vacía (refleja la consulta real).
+        if (sugerencias && sugerencias.length === 0 && localizacionUsada !== '') {
+          Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
+          localizacionUsada = '';
+          sugerencias = consultarAutocomplete_(
+            [prefijo, semilla.termino].filter(p => p !== '').join(' '), idioma.hl, idioma.gl);
+        }
         // null = la llamada falló (ver consultarAutocomplete_) -- acá no se
         // distingue de "sin sugerencias", simplemente no aporta nada esta
         // corrida y se reintenta sola la próxima vez que se corra este Paso.
         (sugerencias || []).forEach((s, indice) => {
           if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) return;
-          if (s.toLowerCase().indexOf(semilla.termino.toLowerCase()) === -1) return;
+          if (!contienePalabrasSemilla_(s, palabrasSemilla)) return;
 
           const clave = s.toLowerCase() + '|' + idioma.codigo;
           if (yaRegistradas[clave]) return; // ya está en la Hoja (de esta corrida o de una anterior)
@@ -93,7 +104,7 @@ function investigarPreguntasAutocomplete() {
           nuevasEnEsteIdioma++;
           preguntasNuevas.push({
             pregunta: s, idioma: idioma.codigo, posicion: indice + 1,
-            semilla: semilla.termino, localizacion: semilla.localizacion
+            semilla: semilla.termino, localizacion: localizacionUsada
           });
         });
         Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
@@ -102,6 +113,39 @@ function investigarPreguntasAutocomplete() {
   });
 
   escribirPreguntasNuevas_(sheet, preguntasNuevas, hoy);
+}
+
+/**
+ * Filtro de ruido (FIX 02/10/2026). Antes exigía la semilla literal como
+ * substring de la sugerencia, y descartaba casi todo: Google devuelve
+ * "software gestion de mantenimiento" (sin tilde) o "software de gestión
+ * de mantenimiento" (palabra intercalada) para la semilla "software
+ * gestión de mantenimiento" -- 10 de 10 sugerencias perdidas. Ahora basta
+ * con que estén todas las palabras con contenido de la semilla, en
+ * cualquier orden, comparando sin tildes ni mayúsculas. Se compara por
+ * substring, así "sistemas" también cuenta para "sistema".
+ */
+const PALABRAS_VACIAS_SEMILLA = [
+  'de', 'del', 'la', 'el', 'los', 'las', 'en', 'para', 'por', 'y', 'con', 'un', 'una',
+  'the', 'of', 'for', 'and', 'a', 'an', 'in', 'to',
+  'der', 'die', 'das', 'fur', 'und', 'mit', 'im', 'von'
+];
+
+function normalizarTexto_(texto) {
+  return texto.toString().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function palabrasClaveSemilla_(termino) {
+  const palabras = normalizarTexto_(termino).split(' ').filter(p => p !== '');
+  const conContenido = palabras.filter(p => PALABRAS_VACIAS_SEMILLA.indexOf(p) === -1);
+  return conContenido.length > 0 ? conContenido : palabras;
+}
+
+function contienePalabrasSemilla_(sugerencia, palabrasSemilla) {
+  const normalizada = normalizarTexto_(sugerencia);
+  return palabrasSemilla.every(p => normalizada.indexOf(p) !== -1);
 }
 
 function leerPreguntasYaRegistradas_(sheet) {
