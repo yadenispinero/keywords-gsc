@@ -29,7 +29,7 @@ configurada en la Script Property `SITE_URL`) y vuelca a la pestaña **"Seguimie
 Real"** las keywords con impresiones/CTR/posición reales, calcula una
 **Acción propuesta** por fórmula (ej. "optimizar meta description",
 "mejorar contenido") y arranca el ciclo de seguimiento por Estado. Corre
-por trigger mensual (`configurarTriggerMensual`).
+por trigger mensual (creado a mano en el editor).
 
 Estas keywords **no** van al banco de contenido — ya tienen página
 rankeando, su ruta es optimización de lo existente (tarea Odoo [A.3]), no

@@ -22,6 +22,19 @@ const CONFIG = {
 };
 
 /**
+ * Lee un dato de instalación desde Script Properties (⚙️ Configuración del
+ * proyecto → Script Properties). Lanza un error claro si falta.
+ */
+function configDato_(clave) {
+  const valor = PropertiesService.getScriptProperties().getProperty(clave);
+  if (!valor) {
+    throw new Error('Falta configurar la Script Property "' + clave + '" (⚙️ Configuración '
+      + 'del proyecto → Script Properties).');
+  }
+  return valor;
+}
+
+/**
  * Lee la propiedad de Search Console a consultar desde Script Properties.
  * Debe coincidir EXACTO con la propiedad verificada en Search Console.
  * Dos formatos posibles según cómo esté verificada la propiedad:
@@ -36,12 +49,7 @@ const CONFIG = {
  * Console antes de configurar esta propiedad.
  */
 function siteUrl_() {
-  const valor = PropertiesService.getScriptProperties().getProperty('SITE_URL');
-  if (!valor) {
-    throw new Error('Falta configurar la Script Property "SITE_URL" (⚙️ Configuración del '
-      + 'proyecto → Script Properties) con la propiedad de Search Console a consultar.');
-  }
-  return valor;
+  return configDato_('SITE_URL');
 }
 
 /**
@@ -407,21 +415,4 @@ function aplicarNotasIniciales_() {
     if (o.estado) sheet.getRange(numFila, colEstado + 1).setValue(o.estado);
     if (o.nota) sheet.getRange(numFila, colNotas + 1).setValue(o.nota);
   });
-}
-
-/**
- * Correr UNA VEZ a mano desde el editor para dejar el trigger mensual
- * activo. Vuelve a correr sin problema — borra el trigger previo de
- * exportarKeywordsGSC antes de crear el nuevo, para no duplicar.
- */
-function configurarTriggerMensual() {
-  ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'exportarKeywordsGSC')
-    .forEach(t => ScriptApp.deleteTrigger(t));
-
-  ScriptApp.newTrigger('exportarKeywordsGSC')
-    .timeBased()
-    .onMonthDay(1)
-    .atHour(6)
-    .create();
 }

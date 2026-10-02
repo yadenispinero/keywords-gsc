@@ -85,10 +85,10 @@ permisos. Verificar que aparecen la pestaña `GSC <fecha>` y la pestaña
 
 ## 9. Activar la corrida automática
 
-Ejecutar `configurarTriggerMensual` una vez a mano desde el editor —
-crea el trigger de tiempo (por defecto, el día 1 de cada mes a las
-6:00). Para cambiar a trimestral o a otra hora, editar esa función en
-`Code.js` antes de correrla.
+Crear el trigger a mano (los triggers no se crean desde código): en el
+editor, ícono de reloj (Activadores) → "Añadir activador" → función
+`exportarKeywordsGSC`, fuente "Basado en tiempo", tipo "Temporizador
+mensual", día 1, 6:00–7:00 (o la periodicidad que se decida).
 
 ## 10. Git
 

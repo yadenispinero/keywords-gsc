@@ -64,14 +64,24 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   un error fatal, a diferencia de `SITE_URL`/`EMAIL_RESUMEN`). El default
   de `Estrategia` NO es Script Property — no identifica ninguna empresa,
   vive en `CONFIG_BANCO.DEFAULT_ESTRATEGIA` dentro del código.
+- `SPREADSHEET_ID` (usado por `validarPreguntasExistentes()` en
+  `Script6_ValidarPreguntas.js`, vía `configDato_()` en `Code.js`) — el ID
+  de ESTA Hoja de cálculo (la que contiene "Preguntas", "Seguimiento",
+  etc.). FIX 13/09/2026: `getActiveSpreadsheet()` tiró "Sheet <id> not
+  found" porque Google guardaba un puntero interno a una pestaña
+  "Preguntas" vieja ya borrada; `openById()` evita depender de ese
+  puntero. Valor real (instalación actual):
+  `12n8DVcR7MlnfyND81xMv5RmML4QkOicPGyj12Bi888Q`.
 
 ## Configuración manual necesaria (no automatizable por Claude Code)
 - El proyecto debe estar autorizado con una cuenta de Google que tenga
   acceso de al menos "Restringido" o superior a la propiedad de Search
   Console del sitio en `SITE_URL`.
-- Correr `configurarTriggerMensual()` una vez a mano desde el editor de
-  Apps Script para activar el trigger de tiempo. Cambiar la periodicidad
-  (mensual/trimestral) requiere editar esa función.
+- Crear a mano el trigger de tiempo de `exportarKeywordsGSC` (editor →
+  Activadores → Añadir activador; mensual, día 1, 6:00). Regla
+  (02/10/2026): los triggers NO se crean desde código —
+  `configurarTriggerMensual()` se eliminó por eso. Cambiar la periodicidad
+  se hace editando el trigger en el editor, sin tocar código.
 
 ## Flujo de trabajo
 Mismo patrón que el resto de mis proyectos Apps Script:

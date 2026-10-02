@@ -79,7 +79,10 @@ function investigarPreguntasAutocomplete() {
         const partes = [prefijo, semilla.termino, semilla.localizacion].filter(p => p !== '');
         const consulta = partes.join(' ');
         const sugerencias = consultarAutocomplete_(consulta, idioma.hl, idioma.gl);
-        sugerencias.forEach((s, indice) => {
+        // null = la llamada falló (ver consultarAutocomplete_) -- acá no se
+        // distingue de "sin sugerencias", simplemente no aporta nada esta
+        // corrida y se reintenta sola la próxima vez que se corra este Paso.
+        (sugerencias || []).forEach((s, indice) => {
           if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) return;
           if (s.toLowerCase().indexOf(semilla.termino.toLowerCase()) === -1) return;
 
@@ -136,11 +139,19 @@ function leerSemillas_() {
     }));
 }
 
+/**
+ * Devuelve el array de sugerencias (puede ser vacío: consulta real sin
+ * resultados), o `null` si la llamada en sí falló (timeout, bloqueo
+ * temporal, respuesta no-200) -- quien llama a esta función decide si esa
+ * distinción le importa (ver validarPreguntasExistentes en
+ * Script6_ValidarPreguntas.gs, donde SÍ importa: ahí un `null` debe
+ * reintentarse la próxima corrida, nunca grabarse como "sin demanda real").
+ */
 function consultarAutocomplete_(consulta, hl, gl) {
   const url = 'https://suggestqueries.google.com/complete/search?client=firefox&hl='
     + hl + '&gl=' + gl + '&q=' + encodeURIComponent(consulta);
   const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-  if (response.getResponseCode() !== 200) return [];
+  if (response.getResponseCode() !== 200) return null;
   const data = JSON.parse(response.getContentText());
   return data[1] || [];
 }

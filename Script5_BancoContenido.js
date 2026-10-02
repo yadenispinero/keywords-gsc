@@ -45,7 +45,8 @@ const CONFIG_BANCO = {
  * Encabezado → valor por defecto para las columnas que sí rellenamos al
  * crear una fila nueva. Espacio/Canales vienen de Script Properties (son
  * específicos de la empresa); Estrategia viene de `CONFIG_BANCO`. Cualquier
- * columna de "Consultoria" que no tenga valor configurado (ni sea "Tema")
+ * columna de "Consultoria" que no tenga valor configurado (ni sea "Idea
+ * original")
  * queda vacía — no es un error, solo faltaría rellenarla a mano.
  */
 function valoresPorDefectoBanco_() {
@@ -99,9 +100,9 @@ function agregarPriorizadasAlBanco_() {
 
   const headers = bancoSheet.getRange(1, 1, 1, bancoSheet.getLastColumn()).getValues()[0]
     .map(h => h.toString().trim());
-  const colTema = headers.indexOf('Tema');
+  const colTema = headers.indexOf('Idea original');
   if (colTema === -1) {
-    throw new Error('No se encontró la columna "Tema" en "' + CONFIG_BANCO.HOJA_BANCO + '".');
+    throw new Error('No se encontró la columna "Idea original" en "' + CONFIG_BANCO.HOJA_BANCO + '".');
   }
 
   const temasExistentes = {};
@@ -125,7 +126,7 @@ function agregarPriorizadasAlBanco_() {
   temasNuevos.forEach(tema => {
     const filaNueva = bancoSheet.getLastRow() + 1;
     const valores = headers.map(h => {
-      if (h === 'Tema') return tema;
+      if (h === 'Idea original') return tema;
       return valoresPorDefecto[h] !== undefined ? valoresPorDefecto[h] : '';
     });
     bancoSheet.getRange(filaNueva, 1, 1, valores.length).setValues([valores]);
