@@ -29,6 +29,7 @@ const CONFIG_PREGUNTAS = {
   HOJA_SEMILLAS: 'Semillas',
   HOJA_PREGUNTAS: 'Preguntas',
   PAUSA_ENTRE_LLAMADAS_MS: 200,
+  TIEMPO_MAX_MS: 4.5 * 60 * 1000, // margen bajo el límite de 6 min de Apps Script para escribir lo encontrado
   MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA: 15, // tope por cada combinación semilla+idioma (ej. "Odoo"+EN)
   IDIOMAS: [
     {
@@ -68,22 +69,31 @@ function investigarPreguntasAutocomplete() {
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const preguntasNuevas = [];
 
+  const inicio = Date.now();
+  let cortadaPorTiempo = false;
+
   semillas.forEach(semilla => {
+    if (cortadaPorTiempo) return;
     const idiomasAplicables = filtrarIdiomas_(semilla.idiomas);
     const palabrasSemilla = palabrasClaveSemilla_(semilla.termino);
     idiomasAplicables.forEach(idioma => {
       let nuevasEnEsteIdioma = 0; // tope por semilla+idioma, cuenta solo lo genuinamente nuevo
+      let localizacionUsada = semilla.localizacion;
       for (let i = 0; i < idioma.prefijos.length; i++) {
         if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) break;
+        // Límite de 6 min de Apps Script: cortar antes y escribir lo
+        // encontrado hasta acá (si no, un timeout pierde toda la corrida).
+        if (Date.now() - inicio > CONFIG_PREGUNTAS.TIEMPO_MAX_MS) { cortadaPorTiempo = true; break; }
 
         const prefijo = idioma.prefijos[i];
-        let localizacionUsada = semilla.localizacion;
         let sugerencias = consultarAutocomplete_(
           [prefijo, semilla.termino, localizacionUsada].filter(p => p !== '').join(' '), idioma.hl, idioma.gl);
         // FIX 02/10/2026: con la Localización agregada (ej. "qué es
         // consultoria Odoo Berlin") el autocompletado casi siempre devuelve
         // [] -- nadie busca así. Si pasa, se reintenta sin Localización, y
         // la fila queda con Localización vacía (refleja la consulta real).
+        // Se descarta la Localización para el resto de prefijos de esta
+        // semilla+idioma: si no dio nada, los prefijos más largos tampoco.
         if (sugerencias && sugerencias.length === 0 && localizacionUsada !== '') {
           Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
           localizacionUsada = '';
@@ -113,6 +123,9 @@ function investigarPreguntasAutocomplete() {
   });
 
   escribirPreguntasNuevas_(sheet, preguntasNuevas, hoy);
+  Logger.log(preguntasNuevas.length + ' preguntas nuevas registradas.' + (cortadaPorTiempo
+    ? ' Corrida cortada por tiempo antes de terminar todas las semillas -- volver a correr (lo ya registrado no se duplica).'
+    : ''));
 }
 
 /**
@@ -219,14 +232,16 @@ function consultarAutocomplete_(consulta, hl, gl) {
  * pestaña "Competencia" separada, eliminada por redundante.
  */
 function escribirPreguntasNuevas_(sheet, preguntasNuevas, fechaStr) {
-  preguntasNuevas.forEach(p => {
-    const filaNueva = sheet.getLastRow() + 1;
-    sheet.getRange(filaNueva, 1, 1, 12).setValues([[
-      p.pregunta, p.idioma, p.posicion, p.localizacion, p.semilla, '', '', '', '', fechaStr, 'Pendiente', ''
-    ]]);
-    aplicarValidacionEstado_(sheet, filaNueva, 1, 11);
-    aplicarValidacionAccionCompetencia_(sheet, filaNueva, 1, 9);
-  });
+  // FIX 02/10/2026: una sola escritura + validaciones una vez para todo el
+  // bloque. Antes iba fila por fila (y cada validación releía "Data"), lo
+  // que con cientos de preguntas nuevas consumía buena parte de los 6 min.
+  if (preguntasNuevas.length === 0) return;
+  const filaInicio = sheet.getLastRow() + 1;
+  sheet.getRange(filaInicio, 1, preguntasNuevas.length, 12).setValues(preguntasNuevas.map(p => [
+    p.pregunta, p.idioma, p.posicion, p.localizacion, p.semilla, '', '', '', '', fechaStr, 'Pendiente', ''
+  ]));
+  aplicarValidacionEstado_(sheet, filaInicio, preguntasNuevas.length, 11);
+  aplicarValidacionAccionCompetencia_(sheet, filaInicio, preguntasNuevas.length, 9);
 }
 
 function obtenerOCrearHojaPreguntas_() {
