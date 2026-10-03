@@ -13,13 +13,13 @@
  *     Cada fila es una página; cada "Columnas de URL" (ej. "URL EN, URL
  *     DE, URL ES") es su URL en un idioma — los slugs pueden traducirse,
  *     por eso se registran completas y no se arman con un prefijo.
- *  2. De cada URL, los campos de "Dónde buscar" (por defecto <meta
- *     name="keywords"> — panel Schlagwörter —, <meta name="description"> y
- *     el texto visible del <body>, sin scripts, estilos ni etiquetas; el
- *     <title> de la pestaña del navegador solo si se agrega). Odoo ya manda
- *     el contenido en el HTML.
- *  3. Keyword y texto normalizados igual (minúsculas, sin tildes, solo
- *     letras y números — normalizarTexto_ en Script2).
+ *  2. De cada URL, los campos de "Dónde buscar": por defecto <meta
+ *     name="description"> y el texto visible del <body> (incluye H1/H2; sin
+ *     scripts, estilos ni etiquetas). El panel Schlagwörter (meta keywords)
+ *     y el <title> solo si se agregan. Odoo ya manda el contenido en el HTML.
+ *  3. Keyword y texto normalizados igual: minúsculas, solo letras y
+ *     números, y sin tildes salvo que "Ignorar tildes" = No (entonces se
+ *     compara como el panel SEO de Odoo).
  *  4. Match por FRASE COMPLETA, como palabras enteras: "consultoria
  *     digital" encuentra "Consultoría digital"; palabras sueltas no
  *     cuentan (evita falsos positivos tipo "field service management
@@ -64,9 +64,17 @@ const TABLA_VERIFICACION_WEB = {
     ['Columna de idioma de la keyword', 'Idioma'],
     ['Solo páginas del mismo idioma', 'Sí'],
     // Dónde se busca la frase. Opciones: title, keywords, descripción, cuerpo.
-    // Por defecto, las tres del algoritmo definido (03/10/2026); el <title>
-    // (pestaña del navegador) queda fuera salvo que se agregue aquí.
-    ['Dónde buscar', 'keywords, descripción, cuerpo']
+    // "keywords" (panel Schlagwörter) NO va por defecto: es la lista de
+    // keywords DECLARADAS para la página, no prueba que estén aplicadas — el
+    // propio panel SEO de Odoo marca dónde aparecen (H1/H2/T/D/C) y la
+    // lista no es una de esas columnas (03/10/2026). H1 y H2 forman parte
+    // del cuerpo. "title" = T de Odoo (pestaña del navegador), fuera por
+    // decisión explícita; se puede agregar.
+    ['Dónde buscar', 'descripción, cuerpo'],
+    // Sí: "automaticos" coincide con "automáticos" (el algoritmo definido).
+    // No: hay que escribir la keyword con las mismas tildes que la página,
+    // igual que compara el panel SEO de Odoo.
+    ['Ignorar tildes', 'Sí']
   ],
   listas: {}
 };
@@ -92,6 +100,7 @@ function opcionesVerificacionWeb_() {
     excluirAviso: lista(valores['Excluir rutas del aviso']).map(r => '/' + r.replace(/^\/+|\/+$/g, '')),
     columnaIdioma: valores['Columna de idioma de la keyword'],
     dondeBuscar: lista(valores['Dónde buscar']).map(d => normalizarTexto_(d)),
+    ignorarTildes: esSi_(valores['Ignorar tildes'] || 'Sí'),
     mismoIdioma: esSi_(valores['Solo páginas del mismo idioma'] || 'No')
   };
 }
@@ -189,7 +198,19 @@ function avisarPaginasSinRegistrar_(destinos, opciones) {
   });
 }
 
-/** HTML → { title, keywords, descripcion, cuerpo }, cada uno normalizado y rodeado de espacios. */
+/**
+ * Igual que normalizarTexto_ (Script2) pero conservando las tildes: solo
+ * minúsculas y letras/números separados por un espacio. Para comparar como
+ * el panel SEO de Odoo ("Ignorar tildes" = No).
+ */
+function normalizarConTildes_(texto) {
+  return texto.toString().normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+/**
+ * HTML → { title, keywords, descripcion, cuerpo } normalizados sin tildes, y
+ * los mismos en `conTildes`. Cada texto rodeado de espacios.
+ */
 function extraerTextosPagina_(html) {
   const meta = nombre => {
     const m = html.match(new RegExp('<meta[^>]+name=["\']' + nombre + '["\'][^>]*>', 'i'));
@@ -200,13 +221,14 @@ function extraerTextosPagina_(html) {
   const cuerpo = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ['', html])[1]
     .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]+>/g, ' ');
-  const preparar = t => ' ' + normalizarTexto_(decodificarEntidades_(t)) + ' ';
-  return {
-    title: preparar(titulo),
-    keywords: preparar(meta('keywords')),
-    descripcion: preparar(meta('description')),
-    cuerpo: preparar(cuerpo)
-  };
+  const preparar = (t, normalizar) => ' ' + normalizar(decodificarEntidades_(t)) + ' ';
+  const todos = normalizar => ({
+    title: preparar(titulo, normalizar),
+    keywords: preparar(meta('keywords'), normalizar),
+    descripcion: preparar(meta('description'), normalizar),
+    cuerpo: preparar(cuerpo, normalizar)
+  });
+  return Object.assign(todos(normalizarTexto_), { conTildes: todos(normalizarConTildes_) });
 }
 
 function decodificarEntidades_(texto) {
@@ -225,16 +247,19 @@ function decodificarEntidades_(texto) {
  * para escribirla luego en la pestaña de páginas.
  */
 function aplicadoEnWeb_(keyword, paginas, idioma, registrar) {
-  const buscada = normalizarTexto_(keyword || '');
+  const opciones = verificacionWeb_.opciones || {};
+  const conTildes = opciones.ignorarTildes === false;
+  const buscada = (conTildes ? normalizarConTildes_ : normalizarTexto_)(keyword || '');
   if (!buscada) return '';
   const aguja = ' ' + buscada + ' ';
   const filtrarIdioma = idioma && verificacionWeb_.opciones && verificacionWeb_.opciones.mismoIdioma;
   let mejor = null;
   Object.keys(paginas).forEach(url => {
     const p = paginas[url];
+    const t = conTildes ? p.conTildes : p;
     if (filtrarIdioma && p.idioma.toUpperCase() !== idioma.toUpperCase()) return;
-    const campos = (verificacionWeb_.opciones && verificacionWeb_.opciones.dondeBuscar) || ['keywords', 'descripcion', 'cuerpo'];
-    const donde = [['title', p.title], ['keywords', p.keywords], ['descripción', p.descripcion], ['cuerpo', p.cuerpo]]
+    const campos = opciones.dondeBuscar || ['descripcion', 'cuerpo'];
+    const donde = [['title', t.title], ['keywords', t.keywords], ['descripción', t.descripcion], ['cuerpo', t.cuerpo]]
       .filter(([nombre]) => campos.indexOf(normalizarTexto_(nombre)) !== -1)
       .filter(([, texto]) => texto.indexOf(aguja) !== -1)
       .map(([nombre]) => nombre);

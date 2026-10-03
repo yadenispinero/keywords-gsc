@@ -184,11 +184,17 @@ está aplicada:
    `URL EN` / `URL DE` / `URL ES`, completas porque los slugs pueden
    traducirse.
 2. **Qué se lee de cada URL:** lo que diga "Dónde buscar" en la tabla
-   "Verificación web". Por defecto son las tres fuentes del algoritmo
-   definido: `<meta name="keywords">` (panel Schlagwörter),
-   `<meta name="description">` y el texto visible del `<body>`. El
-   `<title>` (la pestaña del navegador) no cuenta salvo que se agregue
-   ahí; quedó fuera el 03/10/2026 a pedido explícito. Basta el
+   "Verificación web". Por defecto, `<meta name="description">` y el texto
+   visible del `<body>`, que incluye H1 y H2.
+   - **El panel Schlagwörter (meta keywords) NO cuenta por defecto.** Es
+     la lista de keywords *declaradas* para la página, no prueba que estén
+     aplicadas. El propio panel SEO de Odoo marca dónde aparecen
+     (H1/H2/T/D/C), y la lista no es una de esas columnas.
+   - **El `<title>`** (la T de Odoo, pestaña del navegador) quedó fuera
+     por decisión explícita.
+   - Cualquiera de los dos se puede agregar ahí.
+   - **"Ignorar tildes":** Sí = "automaticos" coincide con "automáticos".
+     No = compara las tildes, igual que el panel de Odoo. Basta el
    HTML, no hace falta ejecutar JavaScript. Cada URL se descarga una sola
    vez por corrida.
 3. **Coincidencia:** frase completa, como palabras enteras, sin tildes ni
