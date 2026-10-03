@@ -100,9 +100,17 @@ const TABLA_CONFIG_ESTADOS = {
 function estadosProtegidos_() {
   const porDefecto = {};
   TABLA_CONFIG_ESTADOS.filas.forEach(f => { porDefecto[f[0]] = f[4]; });
-  return leerTablaData_(TABLA_CONFIG_ESTADOS)
+  const tabla = leerTablaData_(TABLA_CONFIG_ESTADOS);
+  const enTabla = tabla.map(f => texto_(f['Estado']));
+  const protegidos = tabla
     .filter(f => esSi_(tieneValor_(f['Protegido']) ? f['Protegido'] : (porDefecto[texto_(f['Estado'])] || 'No')))
     .map(f => texto_(f['Estado']));
+  // Un Estado protegido por defecto que ni siquiera está en la tabla (fila
+  // borrada, versión vieja restaurada) sigue protegido.
+  Object.keys(porDefecto)
+    .filter(e => esSi_(porDefecto[e]) && enTabla.indexOf(e) === -1)
+    .forEach(e => protegidos.push(e));
+  return protegidos;
 }
 
 /**
