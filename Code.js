@@ -482,7 +482,7 @@ function asegurarReglasAccionEnData_() {
 
   if (dataSheet.getRange('A1').getValue() === '') {
     dataSheet.getRange('A1:B1').setValues([['Estado', 'Description']]);
-    dataSheet.getRange('A2:B9').setValues([
+    dataSheet.getRange('A2:B10').setValues([
       ['Por optimizar', 'Ya apareces en el top pero el CTR es bajo — revisar title/meta/snippet de esa página. Prioridad más alta cuanto más arriba esté la posición.'],
       ['Por investigar volumen', 'Candidata que aún no pasó por Keyword Surfer (Paso 3).'],
       ['Por evaluar competencia', 'Ya tiene volumen, falta ver competencia en GSDE (Paso 4).'],
@@ -490,7 +490,8 @@ function asegurarReglasAccionEnData_() {
       ['Descartada', 'Se decidió no perseguir (volumen insignificante, ruido, o duplicado de otra keyword ya cubierta).'],
       ['Pendiente', 'Recién escrito.'],
       ['Por optimizar — urgente', 'Priorizada con volumen alto (ver CONFIG_EVALUACION.UMBRAL_VOLUMEN_URGENTE) — atender primero.'],
-      ['Por mejorar contenido/ranking', 'El ranking es el problema, no el snippet — requiere contenido más fuerte, enlaces internos o revisar schema/entidad.']
+      ['Por mejorar contenido/ranking', 'El ranking es el problema, no el snippet — requiere contenido más fuerte, enlaces internos o revisar schema/entidad.'],
+      ['Contenido generado', 'Ya hay contenido generado en el banco de contenido que usa esta keyword (lo marca el generador de contenido, link en la columna "Contenido generado").']
     ]);
     dataSheet.getRange('A1:B1').setFontWeight('bold');
     dataSheet.autoResizeColumns(1, 2);
@@ -536,7 +537,9 @@ function aplicarValidacionEstado_(sheet, filaInicio, numFilas, columna) {
   if (numFilas === 0 || !columna) return;
   const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
   if (!dataSheet) return;
-  const numEstados = dataSheet.getRange('A2:A').getValues().filter(f => f[0] !== '').length;
+  // Solo el primer bloque de A (el catálogo): contar todo A2:A metía en la
+  // cuenta la lista de Acción sugerida que está más abajo en la misma columna.
+  const numEstados = leerEstadosValidos_().length;
   if (numEstados === 0) return;
   const rule = SpreadsheetApp.newDataValidation()
     .requireValueInRange(dataSheet.getRange(2, 1, numEstados, 1), true)

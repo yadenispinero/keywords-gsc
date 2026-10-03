@@ -55,7 +55,10 @@ const TABLA_REGLAS_ESTADO = {
     [3, 'Top 10 dominios', 'tiene valor', '', '', 'Por optimizar'],
     [4, 'Acción sugerida (competencia)', 'igual a', 'competir de frente', '', 'Priorizada'],
     [5, 'Acción sugerida (competencia)', 'igual a', 'buscar long-tail', '', 'Pendiente'],
-    [6, 'Volumen mensual', 'número >', 50, 'Priorizada', 'Por optimizar — urgente']
+    [6, 'Volumen mensual', 'número >', 50, 'Priorizada', 'Por optimizar — urgente'],
+    // La columna la llena el generador del banco de contenido (MarcarKeywords.js
+    // en el proyecto de publicaciones). Va última para que gane sobre el resto.
+    [7, 'Contenido generado', 'tiene valor', '', '', 'Contenido generado']
   ],
   listas: { 'Condición': Object.keys(CONDICIONES_REGLA) }
 };
@@ -71,6 +74,7 @@ const TABLA_CONFIG_ESTADOS = {
     ['Por evaluar competencia', 'Sí', 'No', 0],
     ['Por investigar volumen', 'Sí', 'No', 0],
     ['Pendiente', 'Sí', 'No', 0],
+    ['Contenido generado', 'No', 'No', 0],
     ['Descartada', 'No', 'No', 0]
   ],
   listas: { 'Requiere acción': ['Sí', 'No'], 'Pasa al banco de contenido': ['Sí', 'No'] }
@@ -217,8 +221,11 @@ function evaluarHoja_(sheet, reglas, simular) {
     return [nuevo];
   });
 
-  if (huboCambios && !simular) {
-    sheet.getRange(2, colEstado, estados.length, 1).setValues(estados);
+  if (!simular) {
+    if (huboCambios) sheet.getRange(2, colEstado, estados.length, 1).setValues(estados);
+    // Dropdown al día con el catálogo de Data (si se agregó un Estado nuevo,
+    // las filas viejas lo marcaban como inválido).
+    aplicarValidacionEstado_(sheet, 2, estados.length, colEstado);
   }
   Logger.log('"' + sheet.getName() + '": ' + Object.keys(cambios).length + ' tipo(s) de cambio'
     + (simular ? ' (SIMULACIÓN, no se escribió nada)' : '') + ' ' + JSON.stringify(cambios));

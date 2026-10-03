@@ -145,6 +145,19 @@ Priorizada / "buscar long-tail" → Pendiente; Priorizada con volumen > 50
   cambios de Estado y los totales son iguales a la corrida anterior. Por
   defecto es Sí: el correo también sirve para saber que el trigger corre.
 
+## Estado "Contenido generado" (03/10/2026)
+El generador de contenido del proyecto de publicaciones
+(`MarcarKeywords.js`) escribe en Preguntas y Seguimiento una columna
+`Contenido generado`, con el link al contenido, y pone el Estado
+"Contenido generado" a cada keyword que aparece en lo que generó. La
+columna se crea sola la primera vez. La regla 7 de "Reglas de Estado"
+(`Contenido generado | tiene valor`) mantiene ese Estado en
+`evaluarEstados()`. Por defecto es "Requiere acción = No" y "Pasa al
+banco = No": la keyword ya está cubierta y no vuelve al banco. Al
+correr de verdad (no en simulación), `evaluarEstados()` vuelve a aplicar
+el dropdown de Estado a toda la columna. Así un Estado nuevo del
+catálogo no aparece como inválido en las filas viejas.
+
 ## Columnas por encabezado, nunca por posición (03/10/2026)
 Todas las pestañas se leen y escriben ubicando cada columna por su
 encabezado (`columnasPorEncabezado_` / `columnasObligatorias_` en
