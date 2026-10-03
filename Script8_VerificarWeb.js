@@ -13,9 +13,11 @@
  *     Cada fila es una página; cada "Columnas de URL" (ej. "URL EN, URL
  *     DE, URL ES") es su URL en un idioma — los slugs pueden traducirse,
  *     por eso se registran completas y no se arman con un prefijo.
- *  2. De cada URL: <title>, <meta name="keywords">, <meta
- *     name="description"> y el texto visible del <body> (sin scripts,
- *     estilos ni etiquetas). Odoo ya manda el contenido en el HTML.
+ *  2. De cada URL, los campos de "Dónde buscar" (por defecto <meta
+ *     name="keywords"> — panel Schlagwörter —, <meta name="description"> y
+ *     el texto visible del <body>, sin scripts, estilos ni etiquetas; el
+ *     <title> de la pestaña del navegador solo si se agrega). Odoo ya manda
+ *     el contenido en el HTML.
  *  3. Keyword y texto normalizados igual (minúsculas, sin tildes, solo
  *     letras y números — normalizarTexto_ en Script2).
  *  4. Match por FRASE COMPLETA, como palabras enteras: "consultoria
@@ -60,7 +62,11 @@ const TABLA_VERIFICACION_WEB = {
     ['Columna de keywords aplicadas', 'Keywords aplicadas (verificado)'],
     ['Excluir rutas del aviso', '/privacy, /terms'],
     ['Columna de idioma de la keyword', 'Idioma'],
-    ['Solo páginas del mismo idioma', 'Sí']
+    ['Solo páginas del mismo idioma', 'Sí'],
+    // Dónde se busca la frase. Opciones: title, keywords, descripción, cuerpo.
+    // Por defecto, las tres del algoritmo definido (03/10/2026); el <title>
+    // (pestaña del navegador) queda fuera salvo que se agregue aquí.
+    ['Dónde buscar', 'keywords, descripción, cuerpo']
   ],
   listas: {}
 };
@@ -85,6 +91,7 @@ function opcionesVerificacionWeb_() {
     columnaKeywords: valores['Columna de keywords aplicadas'],
     excluirAviso: lista(valores['Excluir rutas del aviso']).map(r => '/' + r.replace(/^\/+|\/+$/g, '')),
     columnaIdioma: valores['Columna de idioma de la keyword'],
+    dondeBuscar: lista(valores['Dónde buscar']).map(d => normalizarTexto_(d)),
     mismoIdioma: esSi_(valores['Solo páginas del mismo idioma'] || 'No')
   };
 }
@@ -226,7 +233,9 @@ function aplicadoEnWeb_(keyword, paginas, idioma, registrar) {
   Object.keys(paginas).forEach(url => {
     const p = paginas[url];
     if (filtrarIdioma && p.idioma.toUpperCase() !== idioma.toUpperCase()) return;
+    const campos = (verificacionWeb_.opciones && verificacionWeb_.opciones.dondeBuscar) || ['keywords', 'descripcion', 'cuerpo'];
     const donde = [['title', p.title], ['keywords', p.keywords], ['descripción', p.descripcion], ['cuerpo', p.cuerpo]]
+      .filter(([nombre]) => campos.indexOf(normalizarTexto_(nombre)) !== -1)
       .filter(([, texto]) => texto.indexOf(aguja) !== -1)
       .map(([nombre]) => nombre);
     if (donde.length === 0) return;

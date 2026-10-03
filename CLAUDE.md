@@ -183,8 +183,12 @@ está aplicada:
    web, en la Hoja del banco). Cada página tiene su URL por idioma en
    `URL EN` / `URL DE` / `URL ES`, completas porque los slugs pueden
    traducirse.
-2. **Qué se lee de cada URL:** `<title>`, `<meta name="keywords">`,
-   `<meta name="description">` y el texto visible del `<body>`. Basta el
+2. **Qué se lee de cada URL:** lo que diga "Dónde buscar" en la tabla
+   "Verificación web". Por defecto son las tres fuentes del algoritmo
+   definido: `<meta name="keywords">` (panel Schlagwörter),
+   `<meta name="description">` y el texto visible del `<body>`. El
+   `<title>` (la pestaña del navegador) no cuenta salvo que se agregue
+   ahí; quedó fuera el 03/10/2026 a pedido explícito. Basta el
    HTML, no hace falta ejecutar JavaScript. Cada URL se descarga una sola
    vez por corrida.
 3. **Coincidencia:** frase completa, como palabras enteras, sin tildes ni
