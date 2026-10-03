@@ -482,7 +482,7 @@ function asegurarReglasAccionEnData_() {
 
   if (dataSheet.getRange('A1').getValue() === '') {
     dataSheet.getRange('A1:B1').setValues([['Estado', 'Description']]);
-    dataSheet.getRange('A2:B10').setValues([
+    dataSheet.getRange('A2:B11').setValues([
       ['Por optimizar', 'Ya apareces en el top pero el CTR es bajo — revisar title/meta/snippet de esa página. Prioridad más alta cuanto más arriba esté la posición.'],
       ['Por investigar volumen', 'Candidata que aún no pasó por Keyword Surfer (Paso 3).'],
       ['Por evaluar competencia', 'Ya tiene volumen, falta ver competencia en GSDE (Paso 4).'],
@@ -491,7 +491,8 @@ function asegurarReglasAccionEnData_() {
       ['Pendiente', 'Recién escrito.'],
       ['Por optimizar — urgente', 'Priorizada con volumen alto (ver CONFIG_EVALUACION.UMBRAL_VOLUMEN_URGENTE) — atender primero.'],
       ['Por mejorar contenido/ranking', 'El ranking es el problema, no el snippet — requiere contenido más fuerte, enlaces internos o revisar schema/entidad.'],
-      ['Contenido generado', 'Ya hay contenido generado en el banco de contenido que usa esta keyword (lo marca el generador de contenido, link en la columna "Contenido generado").']
+      ['Contenido generado', 'Ya hay contenido generado en el banco de contenido que usa esta keyword (lo marca el generador de contenido, link en la columna "Contenido generado").'],
+      ['Aplicado en publicación', 'Ya hay contenido publicado que usa esta keyword (lo marca el generador de contenido, link en la columna "Aplicado en publicación").']
     ]);
     dataSheet.getRange('A1:B1').setFontWeight('bold');
     dataSheet.autoResizeColumns(1, 2);

@@ -56,9 +56,11 @@ const TABLA_REGLAS_ESTADO = {
     [4, 'Acción sugerida (competencia)', 'igual a', 'competir de frente', '', 'Priorizada'],
     [5, 'Acción sugerida (competencia)', 'igual a', 'buscar long-tail', '', 'Pendiente'],
     [6, 'Volumen mensual', 'número >', 50, 'Priorizada', 'Por optimizar — urgente'],
-    // La columna la llena el generador del banco de contenido (MarcarKeywords.js
-    // en el proyecto de publicaciones). Va última para que gane sobre el resto.
-    [7, 'Contenido generado', 'tiene valor', '', '', 'Contenido generado']
+    // Estas dos columnas las llena el generador del banco de contenido
+    // (MarcarKeywords.js en el proyecto de publicaciones). Van últimas para
+    // ganar sobre el resto; publicado después de generado, para ganarle.
+    [7, 'Contenido generado', 'tiene valor', '', '', 'Contenido generado'],
+    [8, 'Aplicado en publicación', 'tiene valor', '', '', 'Aplicado en publicación']
   ],
   listas: { 'Condición': Object.keys(CONDICIONES_REGLA) }
 };
@@ -75,6 +77,7 @@ const TABLA_CONFIG_ESTADOS = {
     ['Por investigar volumen', 'Sí', 'No', 0],
     ['Pendiente', 'Sí', 'No', 0],
     ['Contenido generado', 'No', 'No', 0],
+    ['Aplicado en publicación', 'No', 'No', 0],
     ['Descartada', 'No', 'No', 0]
   ],
   listas: { 'Requiere acción': ['Sí', 'No'], 'Pasa al banco de contenido': ['Sí', 'No'] }

@@ -145,17 +145,24 @@ Priorizada / "buscar long-tail" → Pendiente; Priorizada con volumen > 50
   cambios de Estado y los totales son iguales a la corrida anterior. Por
   defecto es Sí: el correo también sirve para saber que el trigger corre.
 
-## Estado "Contenido generado" (03/10/2026)
-El generador de contenido del proyecto de publicaciones
-(`MarcarKeywords.js`) escribe en Preguntas y Seguimiento una columna
-`Contenido generado`, con el link al contenido, y pone el Estado
-"Contenido generado" a cada keyword que aparece en lo que generó. La
-columna se crea sola la primera vez. La regla 7 de "Reglas de Estado"
-(`Contenido generado | tiene valor`) mantiene ese Estado en
-`evaluarEstados()`. Por defecto es "Requiere acción = No" y "Pasa al
-banco = No": la keyword ya está cubierta y no vuelve al banco. Al
-correr de verdad (no en simulación), `evaluarEstados()` vuelve a aplicar
-el dropdown de Estado a toda la columna. Así un Estado nuevo del
+## Estados "Contenido generado" y "Aplicado en publicación" (03/10/2026)
+El generador del proyecto de publicaciones (`MarcarKeywords.js`) marca en
+Preguntas y Seguimiento cada keyword que aparece en el banco de contenido.
+Cada marca tiene su columna con un link y su Estado, y las columnas se
+crean solas la primera vez:
+- **Contenido generado**: aparece en contenido generado. El link apunta al
+  Doc o a la fila del banco.
+- **Aplicado en publicación**: aparece en contenido ya publicado. El link
+  es el del post publicado. Tiene prioridad: una keyword aplicada no
+  vuelve a "Contenido generado".
+
+Las reglas 7 y 8 de "Reglas de Estado" (`<columna> | tiene valor`)
+mantienen esos Estados en `evaluarEstados()`. La 8 va después de la 7 para
+ganarle. En "Configuración de Estados", las dos tienen "Requiere acción =
+No" y "Pasa al banco = No".
+
+Al correr de verdad (no en simulación), `evaluarEstados()` vuelve a
+aplicar el dropdown de Estado a toda la columna. Así un Estado nuevo del
 catálogo no aparece como inválido en las filas viejas.
 
 ## Columnas por encabezado, nunca por posición (03/10/2026)
