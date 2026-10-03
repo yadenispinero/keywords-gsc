@@ -131,6 +131,8 @@ const TABLA_CORREO_RESUMEN = {
     ['Columna vs. anterior', 'vs. corrida anterior'],
     ['Columna Qué hacer', 'Qué hacer'],
     ['Título cambios', 'Cambios de Estado en'],
+    // Cuántas filas listar debajo de cada cambio (ej. "Aplicado → Pendiente").
+    ['Filas por cambio', 30],
     ['Título muestra', 'Primeras filas en'],
     ['Sin datos', '(ninguno)'],
     ['Título avisos web', 'Verificación en el sitio web'],
@@ -166,6 +168,7 @@ function evaluarEstados_(simular) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const cambiosPorHoja = {};
+  const detallesPorHoja = {};
   const filasPorHoja = {};
 
   CONFIG_EVALUACION.HOJAS.forEach(nombre => {
@@ -176,6 +179,7 @@ function evaluarEstados_(simular) {
     }
     const resultado = evaluarHoja_(sheet, reglas, simular);
     cambiosPorHoja[nombre] = resultado.cambios;
+    detallesPorHoja[nombre] = resultado.detalle;
     filasPorHoja[nombre] = resultado.filas;
   });
 
@@ -192,7 +196,7 @@ function evaluarEstados_(simular) {
     if (!filasPorHoja[nombre]) filasPorHoja[nombre] = filasConEstado_(sheet);
   });
 
-  enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, simular);
+  enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, detallesPorHoja, simular);
 }
 
 /** Reglas de la tabla "Reglas de Estado", ordenadas, con su condición ya resuelta a función. */
@@ -273,6 +277,7 @@ function evaluarHoja_(sheet, reglas, simular) {
     });
 
   const cambios = {};
+  const detalle = {}; // { "A → B": [{ fila, etiqueta }] } para listar en el correo
   const filas = [];
   let huboCambios = false;
 
@@ -296,6 +301,7 @@ function evaluarHoja_(sheet, reglas, simular) {
       huboCambios = true;
       const clave = (actual || '(vacío)') + ' → ' + nuevo;
       cambios[clave] = (cambios[clave] || 0) + 1;
+      (detalle[clave] = detalle[clave] || []).push({ fila: i + 2, etiqueta: texto_(fila[0]) });
     }
     return [nuevo];
   });
@@ -315,7 +321,7 @@ function evaluarHoja_(sheet, reglas, simular) {
   }
   Logger.log('"' + sheet.getName() + '": ' + Object.keys(cambios).length + ' tipo(s) de cambio'
     + (simular ? ' (SIMULACIÓN, no se escribió nada)' : '') + ' ' + JSON.stringify(cambios));
-  return { cambios, filas };
+  return { cambios, detalle, filas };
 }
 
 /**
@@ -345,7 +351,7 @@ function verificarEstadosConfigurados_(reglas) {
  * corrida real, enlaces a la Hoja / pestañas / filas, cambios de Estado de
  * esta corrida y las primeras N filas de los Estados que lo pidan.
  */
-function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, simular) {
+function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, detallesPorHoja, simular) {
   const t = textosCorreo_();
   const config = leerTablaData_(TABLA_CONFIG_ESTADOS).filter(f => esSi_(f['Requiere acción']));
   const descripciones = descripcionesEstados_();
@@ -417,15 +423,34 @@ function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, simular) {
     '  - ' + estado + ': ' + actual[estado] + ' (' + diferencia(estado) + ')'
     + desglosePorHoja_(conteos, estado)).join('\n') + '\n';
 
-  // Cambios de esta corrida
+  // Cambios de esta corrida: total por cambio y, debajo, qué filas
+  // (hasta "Filas por cambio"), con enlace a cada una.
+  const maxFilas = numero_(t['Filas por cambio']) >= 0 ? numero_(t['Filas por cambio']) : 30;
   Object.keys(cambiosPorHoja).forEach(nombre => {
     const cambios = cambiosPorHoja[nombre];
+    const detalle = (detallesPorHoja && detallesPorHoja[nombre]) || {};
     const claves = Object.keys(cambios).sort((a, b) => cambios[b] - cambios[a]);
-    const lista = claves.map(k => k + ': ' + cambios[k]);
-    html += '<h3>' + e(t['Título cambios']) + ' "' + e(nombre) + '"</h3>'
-      + (lista.length === 0 ? '<p>' + e(t['Sin datos']) + '</p>' : '<ul>' + lista.map(x => '<li>' + e(x) + '</li>').join('') + '</ul>');
-    texto += '\n' + t['Título cambios'] + ' "' + nombre + '":\n'
-      + (lista.length === 0 ? '  ' + t['Sin datos'] + '\n' : lista.map(x => '  - ' + x).join('\n') + '\n');
+    html += '<h3>' + e(t['Título cambios']) + ' "' + e(nombre) + '"</h3>';
+    texto += '\n' + t['Título cambios'] + ' "' + nombre + '":\n';
+    if (claves.length === 0) {
+      html += '<p>' + e(t['Sin datos']) + '</p>';
+      texto += '  ' + t['Sin datos'] + '\n';
+      return;
+    }
+    html += '<ul>';
+    claves.forEach(k => {
+      const filasCambio = (detalle[k] || []).slice(0, maxFilas);
+      const resto = cambios[k] - filasCambio.length;
+      html += '<li><b>' + e(k) + ': ' + cambios[k] + '</b>'
+        + (filasCambio.length === 0 ? '' : '<br>' + filasCambio.map(f =>
+          '<a href="' + urlPestana_(hojas[nombre], f.fila) + '">' + f.fila + '</a> ' + e(f.etiqueta)).join(' · ')
+          + (resto > 0 ? ' · (+' + resto + ')' : ''))
+        + '</li>';
+      texto += '  - ' + k + ': ' + cambios[k] + '\n'
+        + filasCambio.map(f => '      fila ' + f.fila + ': ' + f.etiqueta).join('\n') + (filasCambio.length ? '\n' : '')
+        + (resto > 0 ? '      (+' + resto + ' más)\n' : '');
+    });
+    html += '</ul>';
   });
 
   // Filas de muestra
