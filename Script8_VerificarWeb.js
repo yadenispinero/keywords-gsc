@@ -22,9 +22,16 @@
  *     digital" encuentra "Consultoría digital"; palabras sueltas no
  *     cuentan (evita falsos positivos tipo "field service management
  *     berlin" cuando solo están algunas de esas palabras).
- *  5. Filas cuyo Estado actual esté en "No verificar Estados" (por defecto
- *     Descartada) no se tocan: su columna queda como estaba.
- *  6. Cada URL se descarga una sola vez por corrida (cache en memoria).
+ *  5. Idioma (03/10/2026): con "Solo páginas del mismo idioma" = Sí, una
+ *     keyword cuya columna de idioma diga EN solo cuenta en las URLs EN (la
+ *     columna "URL EN"), DE en las DE, etc. Sin esto, "E-Learning Plattform"
+ *     (keyword EN) coincidía con "E-Learning-Plattform" de la página DE. Una
+ *     fila sin idioma (ej. Seguimiento) se busca en todas las páginas.
+ *  6. Filas en un Estado protegido (Configuración de Estados, por defecto
+ *     Descartada) no se tocan; si aparecen en el sitio, el correo lo avisa.
+ *  7. Cada URL se descarga una sola vez por corrida (cache en memoria).
+ *  Nota: el guion cuenta como espacio ("ERP-System" = "erp system"), igual
+ *  que las tildes no cuentan.
  *
  * Además:
  *  - Valor de la columna en la hoja de keywords: "<ID página> · <idioma>
@@ -52,7 +59,8 @@ const TABLA_VERIFICACION_WEB = {
     ['Columnas de URL', 'URL EN, URL DE, URL ES'],
     ['Columna de keywords aplicadas', 'Keywords aplicadas (verificado)'],
     ['Excluir rutas del aviso', '/privacy, /terms'],
-    ['No verificar Estados', 'Descartada']
+    ['Columna de idioma de la keyword', 'Idioma'],
+    ['Solo páginas del mismo idioma', 'Sí']
   ],
   listas: {}
 };
@@ -76,7 +84,8 @@ function opcionesVerificacionWeb_() {
     columnasUrl: lista(valores['Columnas de URL']),
     columnaKeywords: valores['Columna de keywords aplicadas'],
     excluirAviso: lista(valores['Excluir rutas del aviso']).map(r => '/' + r.replace(/^\/+|\/+$/g, '')),
-    noVerificar: lista(valores['No verificar Estados'])
+    columnaIdioma: valores['Columna de idioma de la keyword'],
+    mismoIdioma: esSi_(valores['Solo páginas del mismo idioma'] || 'No')
   };
 }
 
@@ -203,21 +212,25 @@ function decodificarEntidades_(texto) {
 
 /**
  * Dónde aparece `keyword` en el sitio: "<ID> · <idioma> [dónde] <url>" de la
- * mejor coincidencia (más hits en metadatos), o '' si no aparece. Registra
- * cada página donde aparece, para escribirlo luego en la pestaña de páginas.
+ * mejor coincidencia (más hits en metadatos), o '' si no aparece. Con
+ * `idioma` (código de la fila, ej. "EN") y "Solo páginas del mismo idioma"
+ * = Sí, solo mira las URLs de ese idioma. Si `registrar`, anota la página
+ * para escribirla luego en la pestaña de páginas.
  */
-function aplicadoEnWeb_(keyword, paginas) {
+function aplicadoEnWeb_(keyword, paginas, idioma, registrar) {
   const buscada = normalizarTexto_(keyword || '');
   if (!buscada) return '';
   const aguja = ' ' + buscada + ' ';
+  const filtrarIdioma = idioma && verificacionWeb_.opciones && verificacionWeb_.opciones.mismoIdioma;
   let mejor = null;
   Object.keys(paginas).forEach(url => {
     const p = paginas[url];
+    if (filtrarIdioma && p.idioma.toUpperCase() !== idioma.toUpperCase()) return;
     const donde = [['title', p.title], ['keywords', p.keywords], ['descripción', p.descripcion], ['cuerpo', p.cuerpo]]
       .filter(([, texto]) => texto.indexOf(aguja) !== -1)
       .map(([nombre]) => nombre);
     if (donde.length === 0) return;
-    registrarEncontrada_(p.fila, texto_(keyword), p.idioma);
+    if (registrar) registrarEncontrada_(p.fila, texto_(keyword), p.idioma);
     const puntos = donde.filter(d => d !== 'cuerpo').length * 10 + donde.length;
     if (!mejor || puntos > mejor.puntos) mejor = { p: p, donde: donde, puntos: puntos };
   });
@@ -251,6 +264,12 @@ function escribirKeywordsEnPaginas_() {
       .map(k => k + ' (' + porKeyword[k].join(', ') + ')').join('; ')]);
   }
   hoja.getRange(2, col, valores.length, 1).setValues(valores);
+}
+
+/** Keyword en Estado protegido que aparece en el sitio → aviso en el correo (no se cambia nada). */
+function avisoProtegidaEnWeb_(hoja, fila, keyword, estado, donde) {
+  verificacionWeb_.avisos.push('"' + texto_(keyword) + '" (' + hoja + ' fila ' + fila + ', ' + estado
+    + ') aparece en el sitio: ' + donde);
 }
 
 /** Avisos de la verificación web para el correo (páginas que fallaron o sin registrar). */

@@ -123,10 +123,17 @@ ya pasó por Keyword Surfer) → Por evaluar competencia; Top 10 dominios
 con valor → Por optimizar; Acción sugerida "competir de frente" →
 Priorizada / "buscar long-tail" → Pendiente; Priorizada con volumen > 50
 → Por optimizar — urgente.
-- **Recalcula también las "Descartada"** (decisión del 03/10/2026). Un
-  descarte manual se pierde si la fila tiene datos que cumplen alguna
-  regla (ej. Volumen = 0). "Requiere acción" solo afecta al correo, no
-  protege filas.
+- **Estados protegidos (fix 03/10/2026).** La columna "Protegido" de
+  Configuración de Estados (por defecto, solo Descartada = Sí) marca
+  decisiones manuales que nada automático cambia: ni las reglas, ni la
+  verificación web, ni `MarcarKeywords` (Plan Promoción,
+  `CONFIG_MARCA_KEYWORDS.ESTADOS_PROTEGIDOS`).
+  - **Por qué:** al principio el motor recalculaba todas las filas, y en
+    la primera corrida real la regla "Volumen con algún valor" sacó de
+    Descartada las 406 filas. Una segunda corrida las verificó después
+    en la web.
+  - **Celda vacía:** si "Protegido" está vacía (tabla creada antes de
+    esta columna), vale el valor por defecto del código.
 - `simularEvaluacionEstados()` hace lo mismo sin escribir nada (solo log
   y correo con lo que cambiaría). Correrla antes de la primera corrida
   real o después de cambiar una regla.
@@ -195,11 +202,21 @@ sitemap sale de la propia lista: el `robots.txt` de cada dominio
 registrado, o `/sitemap.xml` si no declara ninguno. No hay Script
 Property para esto.
 
-Las filas en "Descartada" no se verifican; la lista está en "No
-verificar Estados". La **regla 9** (`Aplicado en web | tiene valor →
+**Idioma:** con "Solo páginas del mismo idioma" = Sí (por defecto), una
+keyword cuya columna `Idioma` dice EN solo se busca en las URLs de la
+columna `URL EN`, y así con DE y ES. Una fila sin idioma se busca en todas.
+Motivo: "E-Learning Plattform" (keyword EN) coincidía con
+"E-Learning-Plattform" de la página DE. El guion cuenta como espacio, igual
+que las tildes no cuentan.
+
+Las filas en un Estado protegido no se verifican ni se tocan. Si una
+keyword protegida aparece en el sitio, el correo lo avisa: una keyword
+descartada puede estar usándose sin querer, por ejemplo en un title. La
+**regla 9** (`Aplicado en web | tiene valor →
 Aplicado en publicación`) pone el Estado. La configuración está en la
 tabla "Verificación web" de Data: pestaña, columna ID, columnas de URL,
-rutas excluidas del aviso del sitemap y Estados que no se verifican. Si
+rutas excluidas del aviso del sitemap, columna de idioma de la keyword y
+"Solo páginas del mismo idioma". Si
 no se pudo descargar ninguna página, no se toca nada. Al agregar una
 página nueva al sitio, hay que registrarla en `Paginas_Sitio` con sus
 tres URLs; el correo avisa si falta alguna.

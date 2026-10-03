@@ -19,12 +19,15 @@
  * - "Configuración de Estados": por cada Estado, si requiere acción
  *   (entra en el correo resumen), si pasa al banco de contenido (lo usa
  *   publicarPriorizadasEnBancoDeContenido en Script5) y cuántas filas de
- *   muestra listar en el correo (0 o vacío = ninguna).
+ *   muestra listar en el correo (0 o vacío = ninguna), y si está
+ *   "Protegido": una fila en un Estado protegido (por defecto Descartada)
+ *   no la cambia ninguna regla ni la verificación web.
  * - "Correo resumen": textos del correo (para usarlo en otro idioma) y la
  *   opción de no enviarlo cuando nada cambió. Ver enviarResumenEstados_.
  *
- * Se recalculan TODAS las filas, también las "Descartada" (decisión del
- * 03/10/2026) — por eso conviene correr primero simularEvaluacionEstados().
+ * Se recalculan todas las filas MENOS las que están en un Estado
+ * protegido (ver estadosProtegidos_). Conviene correr primero
+ * simularEvaluacionEstados().
  *
  * Sin trigger creado por código (regla del proyecto) — agregarlo a mano:
  * Activadores → Añadir activador → "evaluarEstados".
@@ -69,21 +72,38 @@ const TABLA_REGLAS_ESTADO = {
 
 const TABLA_CONFIG_ESTADOS = {
   titulo: 'Configuración de Estados',
-  encabezados: ['Estado', 'Requiere acción', 'Pasa al banco de contenido', 'Filas de muestra en correo'],
+  encabezados: ['Estado', 'Requiere acción', 'Pasa al banco de contenido', 'Filas de muestra en correo', 'Protegido'],
   filas: [
-    ['Por optimizar — urgente', 'Sí', 'Sí', 10],
-    ['Priorizada', 'Sí', 'Sí', 0],
-    ['Por optimizar', 'Sí', 'No', 0],
-    ['Por mejorar contenido/ranking', 'Sí', 'No', 0],
-    ['Por evaluar competencia', 'Sí', 'No', 0],
-    ['Por investigar volumen', 'Sí', 'No', 0],
-    ['Pendiente', 'Sí', 'No', 0],
-    ['Contenido generado', 'No', 'No', 0],
-    ['Aplicado en publicación', 'No', 'No', 0],
-    ['Descartada', 'No', 'No', 0]
+    ['Por optimizar — urgente', 'Sí', 'Sí', 10, 'No'],
+    ['Priorizada', 'Sí', 'Sí', 0, 'No'],
+    ['Por optimizar', 'Sí', 'No', 0, 'No'],
+    ['Por mejorar contenido/ranking', 'Sí', 'No', 0, 'No'],
+    ['Por evaluar competencia', 'Sí', 'No', 0, 'No'],
+    ['Por investigar volumen', 'Sí', 'No', 0, 'No'],
+    ['Pendiente', 'Sí', 'No', 0, 'No'],
+    ['Contenido generado', 'No', 'No', 0, 'No'],
+    ['Aplicado en publicación', 'No', 'No', 0, 'No'],
+    ['Descartada', 'No', 'No', 0, 'Sí']
   ],
-  listas: { 'Requiere acción': ['Sí', 'No'], 'Pasa al banco de contenido': ['Sí', 'No'] }
+  listas: { 'Requiere acción': ['Sí', 'No'], 'Pasa al banco de contenido': ['Sí', 'No'], 'Protegido': ['Sí', 'No'] }
 };
+
+/**
+ * Estados "Protegido" de "Configuración de Estados": decisiones manuales
+ * que NADA automático cambia — ni las reglas, ni la verificación web, ni
+ * el marcador del banco de contenido (03/10/2026: la primera corrida real
+ * sacó de "Descartada" 406 filas porque las reglas recalculaban todo). Si
+ * la celda está vacía (columna recién agregada a una tabla vieja), vale
+ * el valor por defecto de TABLA_CONFIG_ESTADOS — así Descartada queda
+ * protegida aunque nadie haya llenado la columna.
+ */
+function estadosProtegidos_() {
+  const porDefecto = {};
+  TABLA_CONFIG_ESTADOS.filas.forEach(f => { porDefecto[f[0]] = f[4]; });
+  return leerTablaData_(TABLA_CONFIG_ESTADOS)
+    .filter(f => esSi_(tieneValor_(f['Protegido']) ? f['Protegido'] : (porDefecto[texto_(f['Estado'])] || 'No')))
+    .map(f => texto_(f['Estado']));
+}
 
 /**
  * Textos del correo resumen + opciones. Clave | Valor. Una clave que falte
@@ -203,17 +223,25 @@ function evaluarHoja_(sheet, reglas, simular) {
   // Verificación en el sitio web en vivo (Script8): llena en memoria la
   // columna "Aplicado en web" antes de aplicar las reglas. Si la columna
   // todavía no existe, se usa la siguiente libre (se crea al escribir).
+  const protegidos = estadosProtegidos_();
+  const esProtegida = fila => protegidos.indexOf(texto_(fila[colEstado - 1])) !== -1;
   const paginas = paginasWeb_();
   let colWeb = colHoja(COLUMNA_APLICADO_WEB);
   if (paginas) {
     if (!colWeb) colWeb = sheet.getLastColumn() + 1;
-    const noVerificar = opcionesVerificacionWeb_().noVerificar;
-    datos.forEach(fila => {
-      if (fila.every(v => v === '') || noVerificar.indexOf(texto_(fila[colEstado - 1])) !== -1) {
-        fila[colWeb - 1] = fila[colWeb - 1] === undefined ? '' : fila[colWeb - 1];
+    const colIdioma = colHoja(opcionesVerificacionWeb_().columnaIdioma);
+    datos.forEach((fila, i) => {
+      if (fila[colWeb - 1] === undefined) fila[colWeb - 1] = '';
+      if (fila.every(v => v === '')) return;
+      const idioma = colIdioma ? texto_(fila[colIdioma - 1]) : '';
+      if (esProtegida(fila)) {
+        // No se toca, pero si aparece en el sitio se avisa: una keyword
+        // descartada puede estar usándose sin querer (ej. en un title).
+        const visto = aplicadoEnWeb_(fila[0], paginas, idioma, false);
+        if (visto) avisoProtegidaEnWeb_(sheet.getName(), i + 2, fila[0], fila[colEstado - 1], visto);
         return;
       }
-      fila[colWeb - 1] = aplicadoEnWeb_(fila[0], paginas);
+      fila[colWeb - 1] = aplicadoEnWeb_(fila[0], paginas, idioma, true);
     });
   }
   const col = nombre => (paginas && nombre === COLUMNA_APLICADO_WEB) ? colWeb : colHoja(nombre);
@@ -232,6 +260,10 @@ function evaluarHoja_(sheet, reglas, simular) {
   const estados = datos.map((fila, i) => {
     const actual = fila[colEstado - 1];
     if (fila.every(v => v === '')) return [actual]; // fila vacía
+    if (esProtegida(fila)) {
+      filas.push({ fila: i + 2, etiqueta: texto_(fila[0]), estado: actual });
+      return [actual];
+    }
 
     let nuevo = '';
     aplicables.forEach(r => {
