@@ -147,6 +147,14 @@ function simularEvaluacionEstados() {
 function evaluarEstados_(simular) {
   const reglas = leerReglasEstado_();
   verificarEstadosConfigurados_(reglas);
+  // Seguro (03/10/2026): restaurar una versión vieja de la Hoja revierte
+  // también la pestaña Data. Ahí se perdió la regla 9, y la columna
+  // "Aplicado en web" se llenaba sin que ningún Estado la reflejara.
+  if (paginasWeb_() && !reglas.some(r => normalizarTexto_(r.columna) === normalizarTexto_(COLUMNA_APLICADO_WEB))) {
+    avisosVerificacionWeb_().push('La columna "' + COLUMNA_APLICADO_WEB + '" se llenó, pero ninguna regla de "'
+      + TABLA_REGLAS_ESTADO.titulo + '" (Data) la usa: no se marcará "Aplicado en publicación". Falta la regla '
+      + '"' + COLUMNA_APLICADO_WEB + ' | tiene valor → Aplicado en publicación".');
+  }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const cambiosPorHoja = {};
