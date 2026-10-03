@@ -1,56 +1,52 @@
 /**
- * === CONFIGURACIÓN LOCAL DE ESTE SCRIPT (puente hacia el banco de contenido) ===
+ * === PUENTE HACIA EL BANCO DE CONTENIDO ===
  * Conecta el resultado de [A.1] con el flujo de contenido: las preguntas
- * de "Preguntas" (Paso 2, temas nuevos que no tienen página todavía) que
- * lleguen a un Estado de CONFIG_BANCO.ESTADOS_PARA_BANCO ("Priorizada", o
- * su variante "Por optimizar — urgente" que asigna evaluarEstados() cuando
- * el volumen es alto) se agregan como fila mínima a la pestaña
- * "Consultoria" del banco de contenido (otra Hoja distinta, por ID).
+ * de "Preguntas" (Paso 2, temas nuevos que no tienen página todavía) cuyo
+ * Estado tenga "Sí" en la columna "Pasa al banco de contenido" de la tabla
+ * "Configuración de Estados" (Data — ver Script7_EvaluarEstados.js) se
+ * agregan como fila mínima a la pestaña del banco de contenido (otra Hoja
+ * distinta, por ID).
  *
  * Las keywords de "Seguimiento" (Paso 1) NO se mandan aquí — ya tienen
  * página rankeando en Search Console, su ruta es optimizar lo existente
  * (tarea [A.3]), no crear contenido nuevo.
  *
- * Espacio/Canales por defecto (los valores que sí rellenamos al crear una
- * fila nueva) y el email de resumen NO viven en el código — identifican
- * la instalación concreta, viven en Script Properties (⚙️ Configuración
- * del proyecto → Script Properties): `DEFAULT_ESPACIO`, `DEFAULT_CANALES`,
- * `EMAIL_RESUMEN` (vía emailResumen_() en Code.js). Deben coincidir literalmente con los catálogos de la
- * pestaña de nomencladores del banco de contenido (columnas Espacios /
- * Canales) — si cambian esos catálogos, actualizar la Script Property.
+ * Todo lo que identifica la instalación vive en Script Properties (⚙️
+ * Configuración del proyecto → Script Properties), no en el código:
+ * - `BANCO_SPREADSHEET_ID` y `BANCO_HOJA` (obligatorias, 03/10/2026):
+ *   Hoja de cálculo y pestaña del banco de contenido.
+ * - `DEFAULT_ESPACIO`, `DEFAULT_CANALES` (opcionales): valores por defecto
+ *   de la fila nueva. Deben coincidir literalmente con los catálogos de la
+ *   pestaña de nomencladores del banco de contenido.
+ * - `EMAIL_RESUMEN` (vía emailResumen_() en Code.js).
  * `Estrategia` por defecto sí queda en `CONFIG_BANCO` — no identifica
  * ninguna empresa, es solo una categoría del embudo de contenido.
  *
- * FIX 12/09/2026: "Consultoria" cambia de estructura seguido (se le
- * agrega/reordena columnas — Tipo de publicación, Idioma, Link text
- * fuente, etc.). Antes este script escribía por POSICIÓN fija
- * (COLUMNAS_BANCO, un array de 18 columnas) — cualquier reordenamiento
- * desalineaba los valores en columnas equivocadas sin avisar. Ahora
- * ubica cada columna por su ENCABEZADO en vivo, así sobrevive a
- * reordenamientos futuros sin tocar este código.
+ * FIX 12/09/2026: la pestaña del banco cambia de estructura seguido. Antes
+ * este script escribía por POSICIÓN fija — cualquier reordenamiento
+ * desalineaba los valores sin avisar. Ahora ubica cada columna por su
+ * ENCABEZADO en vivo.
  *
  * El resto de columnas (Contenido base, Enfoque, Tono, etc.) quedan
  * vacías a propósito — es trabajo editorial manual, o se busca en
  * vivo desde Nomencladores por el generador (no se duplica aquí).
  */
 const CONFIG_BANCO = {
-  SPREADSHEET_ID: '1vFLUuk3X0p_ldBnSuD1gs0zjTFaw6xPIidMcWXW8cJ0', // "Plan Promocion"
-  HOJA_BANCO: 'Consultoria',
-
   // No identifica ninguna empresa — solo la categoría de embudo por
   // defecto para contenido nuevo. Ajustar aquí si cambia el catálogo de
   // Estrategia en Nomencladores.
-  DEFAULT_ESTRATEGIA: '02. Contenidos TOFU',
-
-  // Estados de "Preguntas" que pasan al banco de contenido.
-  ESTADOS_PARA_BANCO: ['Priorizada', 'Por optimizar — urgente']
+  DEFAULT_ESTRATEGIA: '02. Contenidos TOFU'
 };
+
+function hojaBanco_() {
+  return configDato_('BANCO_HOJA');
+}
 
 /**
  * Encabezado → valor por defecto para las columnas que sí rellenamos al
  * crear una fila nueva. Espacio/Canales vienen de Script Properties (son
  * específicos de la empresa); Estrategia viene de `CONFIG_BANCO`. Cualquier
- * columna de "Consultoria" que no tenga valor configurado (ni sea "Idea
+ * columna del banco que no tenga valor configurado (ni sea "Idea
  * original")
  * queda vacía — no es un error, solo faltaría rellenarla a mano.
  */
@@ -65,16 +61,16 @@ function valoresPorDefectoBanco_() {
 
 /**
  * Función principal: agrega al banco de contenido las preguntas nuevas
- * en Estado "Priorizada" (o "Por optimizar — urgente"), y manda un correo resumen con lo agregado +
+ * en un Estado que "Pasa al banco de contenido", y manda un correo resumen con lo agregado +
  * el total de filas por Estado en "Seguimiento" y "Preguntas".
  */
 function publicarPriorizadasEnBancoDeContenido() {
   const temasNuevos = agregarPriorizadasAlBanco_();
   if (temasNuevos.length === 0) {
-    Logger.log('Sin novedades: ninguna pregunta en Estado ' + CONFIG_BANCO.ESTADOS_PARA_BANCO.join(' / ')
+    Logger.log('Sin novedades: ninguna pregunta en Estado ' + estadosConfigurados_('Pasa al banco de contenido').join(' / ')
       + ' que no estuviera ya en el banco.');
   } else {
-    Logger.log('Agregadas ' + temasNuevos.length + ' fila(s) nueva(s) a "' + CONFIG_BANCO.HOJA_BANCO + '":');
+    Logger.log('Agregadas ' + temasNuevos.length + ' fila(s) nueva(s) a "' + hojaBanco_() + '":');
     temasNuevos.forEach(t => Logger.log('  - ' + t));
   }
   enviarResumenPorCorreo_(temasNuevos);
@@ -89,17 +85,17 @@ function agregarPriorizadasAlBanco_() {
     return [];
   }
 
-  const bancoSheet = SpreadsheetApp.openById(CONFIG_BANCO.SPREADSHEET_ID)
-    .getSheetByName(CONFIG_BANCO.HOJA_BANCO);
+  const bancoSheet = SpreadsheetApp.openById(configDato_('BANCO_SPREADSHEET_ID'))
+    .getSheetByName(hojaBanco_());
   if (!bancoSheet) {
-    throw new Error('No se encontró la pestaña "' + CONFIG_BANCO.HOJA_BANCO + '" en el banco de contenido.');
+    throw new Error('No se encontró la pestaña "' + hojaBanco_() + '" en el banco de contenido.');
   }
 
   const headers = bancoSheet.getRange(1, 1, 1, bancoSheet.getLastColumn()).getValues()[0]
     .map(h => h.toString().trim());
   const colTema = headers.indexOf('Idea original');
   if (colTema === -1) {
-    throw new Error('No se encontró la columna "Idea original" en "' + CONFIG_BANCO.HOJA_BANCO + '".');
+    throw new Error('No se encontró la columna "Idea original" en "' + hojaBanco_() + '".');
   }
 
   const temasExistentes = {};
@@ -111,10 +107,11 @@ function agregarPriorizadasAlBanco_() {
   }
 
   const c = columnasObligatorias_(preguntas, ['Pregunta', 'Estado']);
+  const estadosParaBanco = estadosConfigurados_('Pasa al banco de contenido');
   const temasNuevos = [];
   preguntas.getRange(2, 1, preguntas.getLastRow() - 1, preguntas.getLastColumn()).getValues().forEach(fila => {
     const pregunta = fila[c['Pregunta'] - 1].toString().trim(), estado = fila[c['Estado'] - 1];
-    if (!pregunta || CONFIG_BANCO.ESTADOS_PARA_BANCO.indexOf(estado) === -1) return;
+    if (!pregunta || estadosParaBanco.indexOf(estado) === -1) return;
     if (temasExistentes[pregunta.toLowerCase()]) return;
     temasExistentes[pregunta.toLowerCase()] = true;
     temasNuevos.push(pregunta);
@@ -140,9 +137,9 @@ function enviarResumenPorCorreo_(temasNuevos) {
   let cuerpo = 'Resumen de investigación de keywords — ' + hoy + '\n\n';
 
   cuerpo += 'Propuestas de contenido nuevas agregadas al banco (pestaña "'
-    + CONFIG_BANCO.HOJA_BANCO + '"):\n';
+    + hojaBanco_() + '"):\n';
   cuerpo += temasNuevos.length === 0
-    ? '  (ninguna esta vez — no hay preguntas nuevas en Estado ' + CONFIG_BANCO.ESTADOS_PARA_BANCO.join(' / ') + ')\n'
+    ? '  (ninguna esta vez — no hay preguntas nuevas en Estado ' + estadosConfigurados_('Pasa al banco de contenido').join(' / ') + ')\n'
     : temasNuevos.map(t => '  - ' + t).join('\n') + '\n';
 
   cuerpo += '\nTotal de keywords/preguntas pendientes por Estado (Seguimiento + Preguntas):\n';

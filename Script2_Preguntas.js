@@ -9,43 +9,54 @@
  * el volumen aquí es bajo (unas pocas decenas de sugerencias por
  * trimestre), no vale la pena meterle una pasada de IA.
  *
- * Multi-idioma (12/09/2026): cada término semilla se consulta en DE/EN/ES
- * por defecto — cada idioma con sus propios prefijos de pregunta (no
- * tiene sentido buscar "qué es" en una consulta en inglés) y su propio
- * hl/gl para que el autocompletado devuelva resultados de ese mercado.
- * Como el idioma de cada consulta lo elegimos nosotros (no hay que
- * detectarlo), cada resultado se etiqueta con ese idioma al registrarlo.
+ * Multi-idioma: cada término semilla se consulta en todos los idiomas de
+ * la tabla "Idiomas" de la pestaña Data (03/10/2026 — antes fijos en el
+ * código) — cada idioma con sus propios prefijos de pregunta (no tiene
+ * sentido buscar "qué es" en una consulta en inglés) y su propio hl/gl
+ * para que el autocompletado devuelva resultados de ese mercado. Agregar
+ * o quitar un mercado se hace en esa tabla, sin tocar código. Cada
+ * resultado se etiqueta con el código del idioma consultado.
  *
  * Semillas por idioma/localización (12/09/2026): la pestaña "Semillas"
  * acepta 2 columnas opcionales además del término — "Idiomas" (ej. "EN"
- * o "EN,DE"; vacío = los 3) para semillas que solo aplican a un mercado
- * (ej. "project manager" solo en inglés), y "Localización" (ej. "Berlin")
- * para acotar la búsqueda a una ciudad/región. El autocompletado de
- * Google no tiene un parámetro de geolocalización a nivel de ciudad —
- * la única forma real de acotar es meter el lugar como texto dentro de
- * la consulta misma (ej. "project manager Berlin").
+ * o "EN,DE"; vacío = todos) para semillas que solo aplican a un mercado,
+ * y "Localización" (ej. una ciudad) para acotar la búsqueda. El
+ * autocompletado de Google no tiene un parámetro de geolocalización a
+ * nivel de ciudad — la única forma real de acotar es meter el lugar como
+ * texto dentro de la consulta misma (ej. "<término> <ciudad>").
  */
 const CONFIG_PREGUNTAS = {
   HOJA_SEMILLAS: 'Semillas',
   HOJA_PREGUNTAS: 'Preguntas',
   PAUSA_ENTRE_LLAMADAS_MS: 200,
   TIEMPO_MAX_MS: 4.5 * 60 * 1000, // margen bajo el límite de 6 min de Apps Script para escribir lo encontrado
-  MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA: 15, // tope por cada combinación semilla+idioma (ej. "Odoo"+EN)
-  IDIOMAS: [
-    {
-      codigo: 'DE', hl: 'de', gl: 'de',
-      prefijos: ['', 'was ist', 'wie', 'warum', 'wann', 'wo', 'wofür', 'welche']
-    },
-    {
-      codigo: 'EN', hl: 'en', gl: 'us',
-      prefijos: ['', 'what is', 'how to', 'why', 'when', 'where', 'what for', 'which']
-    },
-    {
-      codigo: 'ES', hl: 'es', gl: 'es',
-      prefijos: ['', 'qué es', 'cómo', 'por qué', 'cuándo', 'dónde', 'para qué', 'cuál']
-    }
+  MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA: 15 // tope por cada combinación semilla+idioma
+};
+
+/**
+ * Tabla "Idiomas" de Data. Prefijos separados por coma; la consulta sin
+ * prefijo (solo el término) se hace siempre, primero. Los valores de
+ * `filas` son solo los de arranque de una instalación nueva.
+ */
+const TABLA_IDIOMAS = {
+  titulo: 'Idiomas',
+  encabezados: ['Código', 'hl (idioma)', 'gl (país)', 'Prefijos de pregunta'],
+  filas: [
+    ['DE', 'de', 'de', 'was ist, wie, warum, wann, wo, wofür, welche'],
+    ['EN', 'en', 'us', 'what is, how to, why, when, where, what for, which'],
+    ['ES', 'es', 'es', 'qué es, cómo, por qué, cuándo, dónde, para qué, cuál']
   ]
 };
+
+/** Idiomas configurados → [{ codigo, hl, gl, prefijos: ['', ...] }]. */
+function idiomas_() {
+  return leerTablaData_(TABLA_IDIOMAS).map(f => ({
+    codigo: f['Código'].toString().trim().toUpperCase(),
+    hl: f['hl (idioma)'].toString().trim(),
+    gl: f['gl (país)'].toString().trim(),
+    prefijos: [''].concat(f['Prefijos de pregunta'].toString().split(',').map(p => p.trim()).filter(p => p !== ''))
+  }));
+}
 
 /**
  * Lee las semillas de la pestaña "Semillas" (columnas A:C, desde la fila
@@ -65,6 +76,7 @@ function investigarPreguntasAutocomplete() {
   }
 
   const sheet = obtenerOCrearHojaPreguntas_();
+  const idiomas = idiomas_();
   const yaRegistradas = leerPreguntasYaRegistradas_(sheet); // clave: "pregunta en minúsculas|IDIOMA"
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const preguntasNuevas = [];
@@ -74,7 +86,7 @@ function investigarPreguntasAutocomplete() {
 
   semillas.forEach(semilla => {
     if (cortadaPorTiempo) return;
-    const idiomasAplicables = filtrarIdiomas_(semilla.idiomas);
+    const idiomasAplicables = filtrarIdiomas_(semilla.idiomas, idiomas);
     const palabrasSemilla = palabrasClaveSemilla_(semilla.termino);
     idiomasAplicables.forEach(idioma => {
       let nuevasEnEsteIdioma = 0; // tope por semilla+idioma, cuenta solo lo genuinamente nuevo
@@ -89,7 +101,7 @@ function investigarPreguntasAutocomplete() {
         let sugerencias = consultarAutocomplete_(
           [prefijo, semilla.termino, localizacionUsada].filter(p => p !== '').join(' '), idioma.hl, idioma.gl);
         // FIX 02/10/2026: con la Localización agregada (ej. "qué es
-        // consultoria Odoo Berlin") el autocompletado casi siempre devuelve
+        // <término> <ciudad>") el autocompletado casi siempre devuelve
         // [] -- nadie busca así. Si pasa, se reintenta sin Localización, y
         // la fila queda con Localización vacía (refleja la consulta real).
         // Se descarta la Localización para el resto de prefijos de esta
@@ -173,13 +185,13 @@ function leerPreguntasYaRegistradas_(sheet) {
 }
 
 /**
- * "" (vacío en la columna Idiomas) -> los 3 idiomas de CONFIG_PREGUNTAS.
+ * "" (vacío en la columna Idiomas) -> todos los de la tabla "Idiomas".
  * "EN" o "EN,DE" -> solo esos, por código (case-insensitive).
  */
-function filtrarIdiomas_(idiomasTexto) {
-  if (!idiomasTexto) return CONFIG_PREGUNTAS.IDIOMAS;
+function filtrarIdiomas_(idiomasTexto, idiomas) {
+  if (!idiomasTexto) return idiomas;
   const codigos = idiomasTexto.split(',').map(c => c.trim().toUpperCase()).filter(c => c !== '');
-  return CONFIG_PREGUNTAS.IDIOMAS.filter(idioma => codigos.indexOf(idioma.codigo) !== -1);
+  return idiomas.filter(idioma => codigos.indexOf(idioma.codigo) !== -1);
 }
 
 function leerSemillas_() {

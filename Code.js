@@ -134,6 +134,76 @@ function leerEstadosValidos_() {
 }
 
 /**
+ * === TABLAS DE CONFIGURACIÓN EN "Data" (03/10/2026) ===
+ * Todo lo que una instalación quiere ajustar sin tocar código (reglas de
+ * Estado, qué Estados requieren acción, idiomas a investigar...) vive en
+ * una tabla de la pestaña "Data". Cada tabla se ubica por su TÍTULO (una
+ * celda en cualquier columna), así se puede mover a gusto:
+ *
+ *   <Título>
+ *   <encabezado 1> | <encabezado 2> | ...
+ *   valor          | valor          | ...   ← filas hasta la primera con la 1ª celda vacía
+ *
+ * `definicion` = { titulo, encabezados, filas }. `filas` son solo los
+ * valores con que se crea la tabla si todavía no existe (instalación
+ * nueva); desde ahí la fuente de verdad es la Hoja. Las columnas se leen
+ * por POSICIÓN y se devuelven con los nombres de `encabezados` — renombrar
+ * un encabezado en la Hoja no rompe nada, reordenar columnas sí.
+ */
+function leerTablaData_(definicion) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let dataSheet = ss.getSheetByName('Data');
+  if (!dataSheet) dataSheet = ss.insertSheet('Data');
+
+  let celda = dataSheet.createTextFinder(definicion.titulo).matchEntireCell(true).findNext();
+  if (!celda) celda = crearTablaData_(dataSheet, definicion);
+
+  const ancho = definicion.encabezados.length;
+  const primeraFila = celda.getRow() + 2;
+  const ultimaFila = dataSheet.getLastRow();
+  if (ultimaFila < primeraFila) return [];
+
+  const filas = [];
+  const valores = dataSheet.getRange(primeraFila, celda.getColumn(), ultimaFila - primeraFila + 1, ancho).getValues();
+  for (const fila of valores) {
+    if (fila[0] === '') break;
+    const objeto = {};
+    definicion.encabezados.forEach((nombre, i) => { objeto[nombre] = fila[i]; });
+    filas.push(objeto);
+  }
+  return filas;
+}
+
+/**
+ * Crea la tabla a la derecha de lo que ya haya en Data (dejando una
+ * columna libre), con los valores por defecto. Si `definicion.listas`
+ * trae { encabezado: [valores] }, esa columna queda con dropdown.
+ */
+function crearTablaData_(dataSheet, definicion) {
+  const columna = dataSheet.getLastColumn() + 2;
+  const ancho = definicion.encabezados.length;
+  dataSheet.getRange(1, columna).setValue(definicion.titulo).setFontWeight('bold');
+  dataSheet.getRange(2, columna, 1, ancho).setValues([definicion.encabezados]).setFontWeight('bold');
+  if (definicion.filas.length > 0) {
+    dataSheet.getRange(3, columna, definicion.filas.length, ancho).setValues(definicion.filas);
+  }
+  Object.keys(definicion.listas || {}).forEach(encabezado => {
+    const i = definicion.encabezados.indexOf(encabezado);
+    const regla = SpreadsheetApp.newDataValidation()
+      .requireValueInList(definicion.listas[encabezado], true).setAllowInvalid(true).build();
+    dataSheet.getRange(3, columna + i, 50, 1).setDataValidation(regla);
+  });
+  dataSheet.autoResizeColumns(columna, ancho);
+  Logger.log('Creada en "Data" la tabla de configuración "' + definicion.titulo + '" con valores por defecto.');
+  return dataSheet.getRange(1, columna);
+}
+
+/** "Sí" / "si" / "SÍ" / true → true. Para las columnas Sí/No de las tablas de Data. */
+function esSi_(valor) {
+  return valor === true || /^s[ií]$/i.test(valor.toString().trim());
+}
+
+/**
  * Lee la propiedad de Search Console a consultar desde Script Properties.
  * Debe coincidir EXACTO con la propiedad verificada en Search Console.
  * Dos formatos posibles según cómo esté verificada la propiedad:

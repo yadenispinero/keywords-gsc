@@ -54,6 +54,7 @@ function validarPreguntasExistentes() {
   const col = columnasObligatorias_(sheet, ['Pregunta', 'Idioma', 'Posición autocompletado', 'Fecha detectada']);
 
   const datos = sheet.getRange(2, 1, numFilas - 1, sheet.getLastColumn()).getValues();
+  const idiomas = idiomas_();
   const hoy = new Date();
   let procesadas = 0;
   let encontradas = 0;
@@ -66,7 +67,7 @@ function validarPreguntasExistentes() {
     if (!pregunta || posicionActual !== '') return; // ya validada o vacía
 
     const codigoIdioma = (fila[col['Idioma'] - 1] || '').toString().trim().toUpperCase();
-    const idioma = CONFIG_PREGUNTAS.IDIOMAS.find(i => i.codigo === codigoIdioma);
+    const idioma = idiomas.find(i => i.codigo === codigoIdioma);
     if (!idioma) {
       Logger.log('Fila ' + filaReal + ': idioma "' + codigoIdioma + '" no reconocido, se omite.');
       return;

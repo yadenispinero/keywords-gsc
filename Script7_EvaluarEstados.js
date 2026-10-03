@@ -5,24 +5,23 @@
  * dominios, Acción sugerida). Al terminar, manda un correo con cuántas
  * filas hay en cada Estado que requiere acción.
  *
- * Las reglas se aplican EN ORDEN y la última que se cumple es la que
- * define el Estado (cada paso del embudo pisa al anterior):
- *   1. Posición autocompletado ≥ 1       → Por investigar volumen
- *   2. Volumen mensual con algún valor   → Por evaluar competencia (0 cuenta: ya pasó por Keyword Surfer)
- *   3. Top 10 dominios con algún valor   → Por optimizar
- *   4. Acción sugerida = competir de frente → Priorizada
- *      Acción sugerida = buscar long-tail   → Pendiente
- *   5. Priorizada con volumen > UMBRAL_VOLUMEN_URGENTE → Por optimizar — urgente
- * Si ninguna regla se cumple, la fila conserva su Estado actual. Se
- * recalculan TODAS las filas, también las "Descartada" (decisión del
- * 03/10/2026) — por eso conviene correr primero simularEvaluacionEstados().
+ * Nada de esto está fijo en el código — vive en dos tablas de la pestaña
+ * "Data" (ver leerTablaData_ en Code.js), que se crean solas con los
+ * valores por defecto de abajo la primera vez que se corre:
  *
- * Las reglas viven en CONFIG_EVALUACION.REGLAS: cambiar un umbral, un
- * texto de Estado o agregar una regla no requiere tocar la lógica.
- * Columnas localizadas por encabezado (columnasPorEncabezado_ en Code.js);
- * una regla cuya columna no existe en esa pestaña se ignora, así el mismo
- * motor sirve para otras pestañas (ej. Seguimiento, que no tiene
- * "Posición autocompletado").
+ * - "Reglas de Estado": se aplican por Orden y gana la ÚLTIMA que se
+ *   cumple (cada paso del embudo pisa al anterior). Si ninguna se cumple,
+ *   la fila conserva su Estado. "Solo si Estado es" restringe la regla a
+ *   filas que ya llevan ese Estado según las reglas anteriores (ej. pasar
+ *   de Priorizada a urgente). Columna ubicada por encabezado (acepta
+ *   prefijo: "Top 10 dominios" encuentra "Top 10 dominios (Paso 4)"); si
+ *   la pestaña no tiene esa columna, la regla se ignora.
+ * - "Configuración de Estados": por cada Estado, si requiere acción
+ *   (entra en el correo resumen) y si pasa al banco de contenido (lo usa
+ *   publicarPriorizadasEnBancoDeContenido en Script5).
+ *
+ * Se recalculan TODAS las filas, también las "Descartada" (decisión del
+ * 03/10/2026) — por eso conviene correr primero simularEvaluacionEstados().
  *
  * Sin trigger creado por código (regla del proyecto) — agregarlo a mano:
  * Activadores → Añadir activador → "evaluarEstados".
@@ -30,24 +29,48 @@
 const CONFIG_EVALUACION = {
   // Pestañas cuyo Estado se recalcula. Seguimiento no está por defecto:
   // ahí el Estado lo guía la "Acción propuesta" de GSC.
-  HOJAS: ['Preguntas'],
+  HOJAS: ['Preguntas']
+};
 
-  UMBRAL_VOLUMEN_URGENTE: 50,
+/** Condiciones que acepta la columna "Condición" de "Reglas de Estado". */
+const CONDICIONES_REGLA = {
+  'número ≥': (v, x) => numero_(v) >= numero_(x),
+  'número >': (v, x) => numero_(v) > numero_(x),
+  'número ≤': (v, x) => numero_(v) <= numero_(x),
+  'número <': (v, x) => numero_(v) < numero_(x),
+  'tiene valor': v => tieneValor_(v),
+  'está vacío': v => !tieneValor_(v),
+  'igual a': (v, x) => texto_(v).toLowerCase() === texto_(x).toLowerCase()
+};
 
-  // Estados que NO requieren acción — quedan fuera del correo resumen.
-  ESTADOS_SIN_ACCION: ['Descartada'],
+const TABLA_REGLAS_ESTADO = {
+  titulo: 'Reglas de Estado',
+  encabezados: ['Orden', 'Columna', 'Condición', 'Valor', 'Solo si Estado es', 'Estado resultante'],
+  filas: [
+    [1, 'Posición autocompletado', 'número ≥', 1, '', 'Por investigar volumen'],
+    [2, 'Volumen mensual', 'tiene valor', '', '', 'Por evaluar competencia'],
+    [3, 'Top 10 dominios', 'tiene valor', '', '', 'Por optimizar'],
+    [4, 'Acción sugerida (competencia)', 'igual a', 'competir de frente', '', 'Priorizada'],
+    [5, 'Acción sugerida (competencia)', 'igual a', 'buscar long-tail', '', 'Pendiente'],
+    [6, 'Volumen mensual', 'número >', 50, 'Priorizada', 'Por optimizar — urgente']
+  ],
+  listas: { 'Condición': Object.keys(CONDICIONES_REGLA) }
+};
 
-  REGLAS: [
-    { estado: 'Por investigar volumen', columna: 'Posición autocompletado', cumple: v => numero_(v) >= 1 },
-    { estado: 'Por evaluar competencia', columna: 'Volumen mensual', cumple: v => tieneValor_(v) },
-    { estado: 'Por optimizar', columna: 'Top 10 dominios', cumple: v => tieneValor_(v) },
-    { estado: 'Priorizada', columna: 'Acción sugerida (competencia)', cumple: v => texto_(v) === 'competir de frente' },
-    { estado: 'Pendiente', columna: 'Acción sugerida (competencia)', cumple: v => texto_(v) === 'buscar long-tail' },
-    {
-      estado: 'Por optimizar — urgente', siEstado: 'Priorizada', columna: 'Volumen mensual',
-      cumple: v => numero_(v) > CONFIG_EVALUACION.UMBRAL_VOLUMEN_URGENTE
-    }
-  ]
+const TABLA_CONFIG_ESTADOS = {
+  titulo: 'Configuración de Estados',
+  encabezados: ['Estado', 'Requiere acción', 'Pasa al banco de contenido'],
+  filas: [
+    ['Pendiente', 'Sí', 'No'],
+    ['Por investigar volumen', 'Sí', 'No'],
+    ['Por evaluar competencia', 'Sí', 'No'],
+    ['Por optimizar', 'Sí', 'No'],
+    ['Por optimizar — urgente', 'Sí', 'Sí'],
+    ['Por mejorar contenido/ranking', 'Sí', 'No'],
+    ['Priorizada', 'Sí', 'Sí'],
+    ['Descartada', 'No', 'No']
+  ],
+  listas: { 'Requiere acción': ['Sí', 'No'], 'Pasa al banco de contenido': ['Sí', 'No'] }
 };
 
 /** Recalcula y ESCRIBE los Estados, y manda el correo resumen. */
@@ -61,7 +84,9 @@ function simularEvaluacionEstados() {
 }
 
 function evaluarEstados_(simular) {
-  verificarEstadosDeReglas_();
+  const reglas = leerReglasEstado_();
+  const estadosConAccion = estadosConfigurados_('Requiere acción');
+  verificarEstadosConfigurados_(reglas);
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const cambiosPorHoja = {};
@@ -73,7 +98,7 @@ function evaluarEstados_(simular) {
       Logger.log('"' + nombre + '" no existe o está vacía — se omite.');
       return;
     }
-    const resultado = evaluarHoja_(sheet, simular);
+    const resultado = evaluarHoja_(sheet, reglas, simular);
     cambiosPorHoja[nombre] = resultado.cambios;
     conteosEvaluados[nombre] = resultado.conteo;
   });
@@ -83,7 +108,35 @@ function evaluarEstados_(simular) {
   const conteos = contarPorEstado_(hojasConEstado_());
   Object.keys(conteosEvaluados).forEach(nombre => { conteos[nombre] = conteosEvaluados[nombre]; });
 
-  enviarResumenEstados_(cambiosPorHoja, conteos, simular);
+  enviarResumenEstados_(cambiosPorHoja, conteos, estadosConAccion, simular);
+}
+
+/** Reglas de la tabla "Reglas de Estado", ordenadas, con su condición ya resuelta a función. */
+function leerReglasEstado_() {
+  return leerTablaData_(TABLA_REGLAS_ESTADO)
+    .filter(r => tieneValor_(r['Columna']) && tieneValor_(r['Estado resultante']))
+    .map(r => {
+      const condicion = CONDICIONES_REGLA[texto_(r['Condición'])];
+      if (!condicion) {
+        throw new Error('"Reglas de Estado" (Data), Orden ' + r['Orden'] + ': condición "' + r['Condición']
+          + '" no reconocida. Opciones: ' + Object.keys(CONDICIONES_REGLA).join(', ') + '.');
+      }
+      return {
+        orden: numero_(r['Orden']),
+        columna: texto_(r['Columna']),
+        cumple: v => condicion(v, r['Valor']),
+        siEstado: texto_(r['Solo si Estado es']),
+        estado: texto_(r['Estado resultante'])
+      };
+    })
+    .sort((a, b) => a.orden - b.orden);
+}
+
+/** Estados de "Configuración de Estados" con "Sí" en la columna `campo`. */
+function estadosConfigurados_(campo) {
+  return leerTablaData_(TABLA_CONFIG_ESTADOS)
+    .filter(f => esSi_(f[campo]))
+    .map(f => texto_(f['Estado']));
 }
 
 /**
@@ -91,12 +144,12 @@ function evaluarEstados_(simular) {
  * conteo: {estado: n} }. Escribe la columna Estado en un solo bloque, y
  * solo si algo cambió y no es simulación.
  */
-function evaluarHoja_(sheet, simular) {
+function evaluarHoja_(sheet, reglas, simular) {
   const col = columnasPorEncabezado_(sheet);
   const colEstado = col('Estado');
   if (!colEstado) throw new Error('Falta la columna "Estado" en "' + sheet.getName() + '".');
 
-  const reglas = CONFIG_EVALUACION.REGLAS
+  const aplicables = reglas
     .map(r => Object.assign({ indice: col(r.columna) - 1 }, r))
     .filter(r => {
       if (r.indice < 0) Logger.log('"' + sheet.getName() + '": sin columna "' + r.columna + '", se omite la regla → ' + r.estado);
@@ -113,7 +166,7 @@ function evaluarHoja_(sheet, simular) {
     if (fila.every(v => v === '')) return [actual]; // fila vacía
 
     let nuevo = '';
-    reglas.forEach(r => {
+    aplicables.forEach(r => {
       if (r.siEstado && nuevo !== r.siEstado) return;
       if (r.cumple(fila[r.indice])) nuevo = r.estado;
     });
@@ -137,30 +190,32 @@ function evaluarHoja_(sheet, simular) {
 }
 
 /**
- * Cada Estado que asignan las reglas debe existir en el catálogo de Data
- * (si no, el dropdown lo marca como inválido). Corta antes de escribir.
+ * Cada Estado usado en las tablas de configuración debe existir en el
+ * catálogo de Data (si no, el dropdown lo marca como inválido, o un typo
+ * deja una regla sin efecto). Corta antes de escribir nada.
  */
-function verificarEstadosDeReglas_() {
+function verificarEstadosConfigurados_(reglas) {
   const validos = leerEstadosValidos_();
-  const faltantes = CONFIG_EVALUACION.REGLAS
-    .map(r => r.estado)
-    .filter((e, i, todos) => todos.indexOf(e) === i && validos.indexOf(e) === -1);
+  const usados = reglas.map(r => r.estado)
+    .concat(reglas.map(r => r.siEstado).filter(e => e !== ''))
+    .concat(leerTablaData_(TABLA_CONFIG_ESTADOS).map(f => texto_(f['Estado'])));
+  const faltantes = usados.filter((e, i) => usados.indexOf(e) === i && validos.indexOf(e) === -1);
   if (faltantes.length > 0) {
-    throw new Error('Estados de CONFIG_EVALUACION.REGLAS que no están en el catálogo de Data: '
-      + faltantes.join(', ') + '. Agregarlos a Data o corregir el texto de la regla.');
+    throw new Error('Estados de "' + TABLA_REGLAS_ESTADO.titulo + '" / "' + TABLA_CONFIG_ESTADOS.titulo
+      + '" que no están en el catálogo de Estados de Data: ' + faltantes.join(', ') + '.');
   }
 }
 
-function enviarResumenEstados_(cambiosPorHoja, conteos, simular) {
+function enviarResumenEstados_(cambiosPorHoja, conteos, estadosConAccion, simular) {
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const requiereAccion = e => CONFIG_EVALUACION.ESTADOS_SIN_ACCION.indexOf(e) === -1 && e !== '(vacío)';
   const totales = sumarConteos_(conteos);
 
   let cuerpo = (simular ? 'SIMULACIÓN — no se escribió nada en la Hoja.\n\n' : '')
     + 'Evaluación de Estados — ' + hoy + '\n\n'
     + 'Filas en Estados que requieren acción (' + Object.keys(conteos).join(' + ') + '):\n';
 
-  const conAccion = Object.keys(totales).filter(requiereAccion).sort((a, b) => totales[b] - totales[a]);
+  // En el orden de "Configuración de Estados" (el que elige quien la mantiene).
+  const conAccion = estadosConAccion.filter(e => totales[e]);
   cuerpo += conAccion.length === 0
     ? '  (ninguna)\n'
     : conAccion.map(e => '  - ' + e + ': ' + totales[e] + desglosePorHoja_(conteos, e)).join('\n') + '\n';

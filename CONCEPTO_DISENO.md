@@ -1,7 +1,7 @@
 # Concepto de diseño — Investigación y priorización de keywords
 
 Documento de referencia sobre la arquitectura conceptual del sistema
-(Odoo [A.1] "Investigación y priorización de keywords"). No sustituye a
+(tarea [A.1] "Investigación y priorización de keywords"). No sustituye a
 `CLAUDE.md`/`README.md` (convenciones y flujo de trabajo de código) — este
 describe el **flujo de negocio** completo: qué se automatizó, qué se
 descartó y por qué, y qué sigue siendo manual.
@@ -16,7 +16,7 @@ aquí para que quede claro que fue una decisión informada y no un olvido.
 
 ```
 Paso 1: Keywords con tráfico real (GSC)  ──┐
-Paso 2: Preguntas nuevas (autocomplete)  ──┼─→ Estado por fila → Script5 → Consultoria
+Paso 2: Preguntas nuevas (autocomplete)  ──┼─→ Estado por fila → Script5 → banco    
 Paso 3: Volumen de búsqueda              ──┤   (banco de contenido)
 Paso 4: Competencia                      ──┘
 ```
@@ -32,7 +32,7 @@ Real"** las keywords con impresiones/CTR/posición reales, calcula una
 por trigger mensual (creado a mano en el editor).
 
 Estas keywords **no** van al banco de contenido — ya tienen página
-rankeando, su ruta es optimización de lo existente (tarea Odoo [A.3]), no
+rankeando, su ruta es optimización de lo existente (tarea [A.3]), no
 generación de contenido nuevo.
 
 ### 2. Preguntas nuevas — `Script2_Preguntas.js`, automático
@@ -88,11 +88,13 @@ separado — los datos ahora viven como columnas dentro de "Seguimiento" y
 ## Puente hacia generación de contenido
 
 `Script5_BancoContenido.js` → `publicarPriorizadasEnBancoDeContenido()`:
-toma las preguntas en Estado **"Priorizada"** (Paso 2) que no estén ya en
-el banco, y agrega una fila mínima a la pestaña `Consultoria` del proyecto
-`Publicaciones-Plan-Promocion` (Hoja "Plan Promocion", por ID — proyectos
-de Apps Script distintos). Ubica columnas por **encabezado**, no por
-posición fija, para sobrevivir a reordenamientos de `Consultoria`.
+toma las preguntas cuyo Estado "Pasa al banco de contenido" (tabla
+Configuración de Estados en Data; por defecto "Priorizada" y "Por
+optimizar — urgente") que no estén ya en el banco, y agrega una fila
+mínima a la pestaña del banco de contenido (otra Hoja, otro proyecto de
+Apps Script — Script Properties `BANCO_SPREADSHEET_ID` / `BANCO_HOJA`).
+Ubica columnas por **encabezado**, no por posición fija, para sobrevivir
+a reordenamientos de esa pestaña.
 Solo rellena `Tema` + los valores por defecto de `Estrategia`/`Espacio`/
 `Canales` (Script Properties `DEFAULT_ESTRATEGIA`/`DEFAULT_ESPACIO`/
 `DEFAULT_CANALES`) — el resto queda vacío a propósito, es trabajo
@@ -114,7 +116,7 @@ con lo agregado y el total de filas por Estado combinando "Seguimiento" +
   se prioriza siempre la alternativa gratuita (autocomplete público,
   extensiones de navegador) aunque implique un paso manual.
 - `Script5` ubica columnas por encabezado, nunca por posición fija — la
-  estructura de `Consultoria` cambia seguido.
+  estructura de la pestaña del banco cambia seguido.
 
 ## Pendientes / abierto
 
