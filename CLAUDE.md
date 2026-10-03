@@ -77,6 +77,13 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   `CONFIG_BANCO`) — Hoja de cálculo y pestaña del banco de contenido.
   Valores de la instalación actual: `1vFLUuk3X0p_ldBnSuD1gs0zjTFaw6xPIidMcWXW8cJ0`
   y `Consultoria`.
+- `SITEMAP_URL` (opcional, 03/10/2026 — Script8) — sitemap del sitio
+  (ej. `https://www.yfokus.de/sitemap.xml`). Solo sirve para avisar en
+  el correo de páginas publicadas que no están registradas en
+  `Paginas_Sitio`. Sin ella no hay aviso, pero la verificación funciona.
+- `PAGINAS_SPREADSHEET_ID` (opcional) — Hoja con la pestaña de páginas
+  del sitio. Si falta, se usa `BANCO_SPREADSHEET_ID`, porque hoy
+  `Paginas_Sitio` vive en la misma Hoja que el banco.
 - `NOMBRE_INSTALACION` (opcional, 03/10/2026 — `enviarCorreo_()` en
   `Code.js`) — si existe, el asunto de todos los correos va precedido de
   `[<nombre>] `. Sirve para distinguir los correos cuando varias entidades
@@ -164,6 +171,37 @@ No" y "Pasa al banco = No".
 Al correr de verdad (no en simulación), `evaluarEstados()` vuelve a
 aplicar el dropdown de Estado a toda la columna. Así un Estado nuevo del
 catálogo no aparece como inválido en las filas viejas.
+
+## Verificación en el sitio web en vivo (03/10/2026)
+`Script8_VerificarWeb.js`, llamado desde `evaluarEstados()` antes de
+aplicar las reglas. Comprueba en las páginas publicadas si cada keyword
+está aplicada:
+1. **Fuente de páginas:** la pestaña `Paginas_Sitio` (inventario de la
+   web, en la Hoja del banco). Cada página tiene su URL por idioma en
+   `URL EN` / `URL DE` / `URL ES`, completas porque los slugs pueden
+   traducirse.
+2. **Qué se lee de cada URL:** `<title>`, `<meta name="keywords">`,
+   `<meta name="description">` y el texto visible del `<body>`. Basta el
+   HTML, no hace falta ejecutar JavaScript. Cada URL se descarga una sola
+   vez por corrida.
+3. **Coincidencia:** frase completa, como palabras enteras, sin tildes ni
+   mayúsculas. Las palabras sueltas no cuentan.
+
+Escribe:
+- **Hoja de keywords**, columna `Aplicado en web`: `PAG-xxx · idioma
+  [title, keywords, descripción, cuerpo] url` de la mejor coincidencia.
+  Si la keyword desaparece del sitio, se vacía.
+- **`Paginas_Sitio`**, columna `Keywords aplicadas (verificado)`: por
+  página, las keywords que contiene, con sus idiomas.
+
+Las filas en "Descartada" no se verifican; la lista está en "No
+verificar Estados". La **regla 9** (`Aplicado en web | tiene valor →
+Aplicado en publicación`) pone el Estado. La configuración está en la
+tabla "Verificación web" de Data: pestaña, columna ID, columnas de URL,
+rutas excluidas del aviso del sitemap y Estados que no se verifican. Si
+no se pudo descargar ninguna página, no se toca nada. Al agregar una
+página nueva al sitio, hay que registrarla en `Paginas_Sitio` con sus
+tres URLs; el correo avisa si falta alguna.
 
 ## Columnas por encabezado, nunca por posición (03/10/2026)
 Todas las pestañas se leen y escriben ubicando cada columna por su

@@ -60,7 +60,9 @@ const TABLA_REGLAS_ESTADO = {
     // (MarcarKeywords.js en el proyecto de publicaciones). Van últimas para
     // ganar sobre el resto; publicado después de generado, para ganarle.
     [7, 'Contenido generado', 'tiene valor', '', '', 'Contenido generado'],
-    [8, 'Aplicado en publicación', 'tiene valor', '', '', 'Aplicado en publicación']
+    [8, 'Aplicado en publicación', 'tiene valor', '', '', 'Aplicado en publicación'],
+    // La llena la verificación en el sitio web en vivo (Script8).
+    [9, 'Aplicado en web', 'tiene valor', '', '', 'Aplicado en publicación']
   ],
   listas: { 'Condición': Object.keys(CONDICIONES_REGLA) }
 };
@@ -103,6 +105,7 @@ const TABLA_CORREO_RESUMEN = {
     ['Título cambios', 'Cambios de Estado en'],
     ['Título muestra', 'Primeras filas en'],
     ['Sin datos', '(ninguno)'],
+    ['Título avisos web', 'Verificación en el sitio web'],
     ['Enviar aunque no haya cambios', 'Sí']
   ],
   listas: {}
@@ -139,6 +142,9 @@ function evaluarEstados_(simular) {
     cambiosPorHoja[nombre] = resultado.cambios;
     filasPorHoja[nombre] = resultado.filas;
   });
+
+  // Keywords encontradas por página → pestaña de páginas del sitio (Script8).
+  if (!simular) escribirKeywordsEnPaginas_();
 
   // Pestañas evaluadas: Estados desde memoria (en simulación la Hoja
   // todavía no los tiene). El resto de pestañas con Estado: en vivo.
@@ -188,9 +194,29 @@ function estadosConfigurados_(campo) {
  * solo si algo cambió y no es simulación.
  */
 function evaluarHoja_(sheet, reglas, simular) {
-  const col = columnasPorEncabezado_(sheet);
-  const colEstado = col('Estado');
+  const colHoja = columnasPorEncabezado_(sheet);
+  const colEstado = colHoja('Estado');
   if (!colEstado) throw new Error('Falta la columna "Estado" en "' + sheet.getName() + '".');
+
+  const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+
+  // Verificación en el sitio web en vivo (Script8): llena en memoria la
+  // columna "Aplicado en web" antes de aplicar las reglas. Si la columna
+  // todavía no existe, se usa la siguiente libre (se crea al escribir).
+  const paginas = paginasWeb_();
+  let colWeb = colHoja(COLUMNA_APLICADO_WEB);
+  if (paginas) {
+    if (!colWeb) colWeb = sheet.getLastColumn() + 1;
+    const noVerificar = opcionesVerificacionWeb_().noVerificar;
+    datos.forEach(fila => {
+      if (fila.every(v => v === '') || noVerificar.indexOf(texto_(fila[colEstado - 1])) !== -1) {
+        fila[colWeb - 1] = fila[colWeb - 1] === undefined ? '' : fila[colWeb - 1];
+        return;
+      }
+      fila[colWeb - 1] = aplicadoEnWeb_(fila[0], paginas);
+    });
+  }
+  const col = nombre => (paginas && nombre === COLUMNA_APLICADO_WEB) ? colWeb : colHoja(nombre);
 
   const aplicables = reglas
     .map(r => Object.assign({ indice: col(r.columna) - 1 }, r))
@@ -199,7 +225,6 @@ function evaluarHoja_(sheet, reglas, simular) {
       return r.indice >= 0;
     });
 
-  const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
   const cambios = {};
   const filas = [];
   let huboCambios = false;
@@ -225,6 +250,13 @@ function evaluarHoja_(sheet, reglas, simular) {
   });
 
   if (!simular) {
+    if (paginas) {
+      if (colWeb > sheet.getLastColumn()) {
+        if (colWeb > sheet.getMaxColumns()) sheet.insertColumnsAfter(sheet.getMaxColumns(), 1);
+        sheet.getRange(1, colWeb).setValue(COLUMNA_APLICADO_WEB).setFontWeight('bold');
+      }
+      sheet.getRange(2, colWeb, datos.length, 1).setValues(datos.map(f => [f[colWeb - 1]]));
+    }
     if (huboCambios) sheet.getRange(2, colEstado, estados.length, 1).setValues(estados);
     // Dropdown al día con el catálogo de Data (si se agregó un Estado nuevo,
     // las filas viejas lo marcaban como inválido).
@@ -361,6 +393,13 @@ function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, simular) {
     texto += '\n' + t['Título muestra'] + ' "' + estado + '" (' + visibles.length + '/' + muestra.length + '):\n'
       + visibles.map(m => '  - ' + m.x.etiqueta + ' (' + m.hoja + ', fila ' + m.x.fila + ')').join('\n') + '\n';
   });
+
+  // Avisos de la verificación web: URLs que fallaron, páginas sin registrar.
+  const avisos = avisosVerificacionWeb_();
+  if (avisos.length > 0) {
+    html += '<h3>' + e(t['Título avisos web']) + '</h3><ul>' + avisos.map(a => '<li>' + e(a) + '</li>').join('') + '</ul>';
+    texto += '\n' + t['Título avisos web'] + ':\n' + avisos.map(a => '  - ' + a).join('\n') + '\n';
+  }
 
   html += '</div>';
   enviarCorreo_(t['Asunto'] + ' ' + hoy + (simular ? ' (SIMULACIÓN)' : ''), texto, html);

@@ -492,7 +492,7 @@ function asegurarReglasAccionEnData_() {
       ['Por optimizar — urgente', 'Priorizada con volumen alto (ver CONFIG_EVALUACION.UMBRAL_VOLUMEN_URGENTE) — atender primero.'],
       ['Por mejorar contenido/ranking', 'El ranking es el problema, no el snippet — requiere contenido más fuerte, enlaces internos o revisar schema/entidad.'],
       ['Contenido generado', 'Ya hay contenido generado en el banco de contenido que usa esta keyword (lo marca el generador de contenido, link en la columna "Contenido generado").'],
-      ['Aplicado en publicación', 'Ya hay contenido publicado que usa esta keyword (lo marca el generador de contenido, link en la columna "Aplicado en publicación").']
+      ['Aplicado en publicación', 'Ya hay contenido publicado que usa esta keyword: lo marca el generador de contenido (columna "Aplicado en publicación") o la verificación en el sitio web en vivo (columna "Aplicado en web").']
     ]);
     dataSheet.getRange('A1:B1').setFontWeight('bold');
     dataSheet.autoResizeColumns(1, 2);
