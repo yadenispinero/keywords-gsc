@@ -251,8 +251,11 @@ function evaluarHoja_(sheet, reglas, simular) {
       if (fila.every(v => v === '')) return;
       const idioma = colIdioma ? texto_(fila[colIdioma - 1]) : '';
       if (esProtegida(fila)) {
-        // No se toca, pero si aparece en el sitio se avisa: una keyword
-        // descartada puede estar usándose sin querer (ej. en un title).
+        // El Estado no se toca y la columna queda vacía (un valor ahí haría
+        // que la regla 9 la marcara si algún día se desprotege). Si aparece
+        // en el sitio, se avisa en el correo: una keyword descartada puede
+        // estar usándose sin querer (ej. en un title).
+        fila[colWeb - 1] = '';
         const visto = aplicadoEnWeb_(fila[0], paginas, idioma, false);
         if (visto) avisoProtegidaEnWeb_(sheet.getName(), i + 2, fila[0], fila[colEstado - 1], visto);
         return;
