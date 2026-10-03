@@ -231,6 +231,35 @@ no se pudo descargar ninguna página, no se toca nada. Al agregar una
 página nueva al sitio, hay que registrarla en `Paginas_Sitio` con sus
 tres URLs; el correo avisa si falta alguna.
 
+## Partes de una publicación y espera de medición (03/10/2026)
+Tres Estados más, todos desde la verificación web y sin columna "Página
+destino": una keyword puede estar en varias páginas, y `Paginas_Sitio` ya
+dice qué keywords tiene cada una.
+- **Pendiente de metadatos** (regla 10): la mejor página tiene la keyword
+  en el cuerpo, pero no en la meta description.
+- **Pendiente de contenido** (regla 11): está en la meta description, pero
+  no en el cuerpo.
+- Si está en las dos, la regla 12 la devuelve a **Aplicado en
+  publicación**.
+- **En medición** (regla 13): aplicada en las dos partes hace menos de 28
+  días. Pasado ese plazo vuelve a Aplicado en publicación, y ahí la mide
+  TP-36.
+
+Las reglas 10–12 leen los campos entre corchetes de "Aplicado en web"
+(condición `contiene`; "cuerpo" siempre va último, por eso se busca
+"cuerpo]"). Como la mejor página es la de más campos de metadatos, basta
+con que una página tenga la keyword en las dos partes.
+
+La columna **Fecha cambio en web** la escribe `evaluarHoja_` junto a
+"Aplicado en web": la fecha en que cambió por última vez su valor (otra
+página u otros campos). Se vacía si la keyword deja de aparecer. Las
+keywords que ya estaban aplicadas antes de esta columna toman la fecha de
+la primera corrida, así que pasan 28 días En medición.
+
+Condiciones nuevas de "Reglas de Estado": `contiene`, `no contiene`,
+`días desde ≥` y `días desde <` (para columnas con fecha; una celda sin
+fecha no cumple ninguna).
+
 ## Columnas por encabezado, nunca por posición (03/10/2026)
 Todas las pestañas se leen y escriben ubicando cada columna por su
 encabezado (`columnasPorEncabezado_` / `columnasObligatorias_` en

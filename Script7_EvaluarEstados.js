@@ -46,7 +46,12 @@ const CONDICIONES_REGLA = {
   'número <': (v, x) => numero_(v) < numero_(x),
   'tiene valor': v => tieneValor_(v),
   'está vacío': v => !tieneValor_(v),
-  'igual a': (v, x) => texto_(v).toLowerCase() === texto_(x).toLowerCase()
+  'igual a': (v, x) => texto_(v).toLowerCase() === texto_(x).toLowerCase(),
+  'contiene': (v, x) => texto_(v).toLowerCase().indexOf(texto_(x).toLowerCase()) !== -1,
+  'no contiene': (v, x) => texto_(v).toLowerCase().indexOf(texto_(x).toLowerCase()) === -1,
+  // Fechas (ej. "Fecha cambio en web"). Una celda sin fecha no cumple ninguna.
+  'días desde ≥': (v, x) => diasDesde_(v) >= numero_(x),
+  'días desde <': (v, x) => diasDesde_(v) < numero_(x)
 };
 
 const TABLA_REGLAS_ESTADO = {
@@ -65,7 +70,15 @@ const TABLA_REGLAS_ESTADO = {
     [7, 'Contenido generado', 'tiene valor', '', '', 'Contenido generado'],
     [8, 'Aplicado en publicación', 'tiene valor', '', '', 'Aplicado en publicación'],
     // La llena la verificación en el sitio web en vivo (Script8).
-    [9, 'Aplicado en web', 'tiene valor', '', '', 'Aplicado en publicación']
+    [9, 'Aplicado en web', 'tiene valor', '', '', 'Aplicado en publicación'],
+    // Partes de una publicación en la web (03/10/2026): contenido = cuerpo,
+    // metadatos = meta description. "Aplicado en web" lista los campos de la
+    // mejor página entre corchetes, con "cuerpo" siempre al final.
+    [10, 'Aplicado en web', 'contiene', 'cuerpo]', 'Aplicado en publicación', 'Pendiente de metadatos'],
+    [11, 'Aplicado en web', 'contiene', 'descripción', 'Aplicado en publicación', 'Pendiente de contenido'],
+    [12, 'Aplicado en web', 'contiene', 'descripción', 'Pendiente de metadatos', 'Aplicado en publicación'],
+    // Recién aplicada en las dos partes: esperar antes de medir el efecto (TP-36).
+    [13, 'Fecha cambio en web', 'días desde <', 28, 'Aplicado en publicación', 'En medición']
   ],
   listas: { 'Condición': Object.keys(CONDICIONES_REGLA) }
 };
@@ -81,7 +94,10 @@ const TABLA_CONFIG_ESTADOS = {
     ['Por evaluar competencia', 'Sí', 'No', 0, 'No'],
     ['Por investigar volumen', 'Sí', 'No', 0, 'No'],
     ['Pendiente', 'Sí', 'No', 0, 'No'],
+    ['Pendiente de contenido', 'Sí', 'No', 10, 'No'],
+    ['Pendiente de metadatos', 'Sí', 'No', 10, 'No'],
     ['Contenido generado', 'No', 'No', 0, 'No'],
+    ['En medición', 'No', 'No', 0, 'No'],
     ['Aplicado en publicación', 'No', 'No', 0, 'No'],
     ['Descartada', 'No', 'No', 0, 'Sí']
   ],
@@ -247,12 +263,18 @@ function evaluarHoja_(sheet, reglas, simular) {
   const esProtegida = fila => protegidos.indexOf(texto_(fila[colEstado - 1])) !== -1;
   const paginas = paginasWeb_();
   let colWeb = colHoja(COLUMNA_APLICADO_WEB);
+  let colFecha = colHoja(COLUMNA_FECHA_CAMBIO_WEB);
   if (paginas) {
-    if (!colWeb) colWeb = sheet.getLastColumn() + 1;
+    let libre = sheet.getLastColumn() + 1;
+    if (!colWeb) colWeb = libre++;
+    if (!colFecha) colFecha = libre++;
     const colIdioma = colHoja(opcionesVerificacionWeb_().columnaIdioma);
+    const hoy = new Date();
     datos.forEach((fila, i) => {
       if (fila[colWeb - 1] === undefined) fila[colWeb - 1] = '';
+      if (fila[colFecha - 1] === undefined) fila[colFecha - 1] = '';
       if (fila.every(v => v === '')) return;
+      const antes = texto_(fila[colWeb - 1]);
       const idioma = colIdioma ? texto_(fila[colIdioma - 1]) : '';
       if (esProtegida(fila)) {
         // El Estado no se toca y la columna queda vacía (un valor ahí haría
@@ -260,14 +282,26 @@ function evaluarHoja_(sheet, reglas, simular) {
         // en el sitio, se avisa en el correo: una keyword descartada puede
         // estar usándose sin querer (ej. en un title).
         fila[colWeb - 1] = '';
+        fila[colFecha - 1] = '';
         const visto = aplicadoEnWeb_(fila[0], paginas, idioma, false);
         if (visto) avisoProtegidaEnWeb_(sheet.getName(), i + 2, fila[0], fila[colEstado - 1], visto);
         return;
       }
-      fila[colWeb - 1] = aplicadoEnWeb_(fila[0], paginas, idioma, true);
+      const ahora = aplicadoEnWeb_(fila[0], paginas, idioma, true);
+      fila[colWeb - 1] = ahora;
+      // "Fecha cambio en web": cuándo cambió por última vez dónde aparece la
+      // keyword (página o campos). Empieza la espera de medición (regla 13).
+      // Las que ya estaban aplicadas antes de esta columna toman la fecha de
+      // la primera corrida, porque la real no se conoce.
+      if (!ahora) fila[colFecha - 1] = '';
+      else if (ahora !== antes || !tieneValor_(fila[colFecha - 1])) fila[colFecha - 1] = hoy;
     });
   }
-  const col = nombre => (paginas && nombre === COLUMNA_APLICADO_WEB) ? colWeb : colHoja(nombre);
+  const col = nombre => {
+    if (paginas && nombre === COLUMNA_APLICADO_WEB) return colWeb;
+    if (paginas && nombre === COLUMNA_FECHA_CAMBIO_WEB) return colFecha;
+    return colHoja(nombre);
+  };
 
   const aplicables = reglas
     .map(r => Object.assign({ indice: col(r.columna) - 1 }, r))
@@ -308,11 +342,12 @@ function evaluarHoja_(sheet, reglas, simular) {
 
   if (!simular) {
     if (paginas) {
-      if (colWeb > sheet.getLastColumn()) {
-        if (colWeb > sheet.getMaxColumns()) sheet.insertColumnsAfter(sheet.getMaxColumns(), 1);
-        sheet.getRange(1, colWeb).setValue(COLUMNA_APLICADO_WEB).setFontWeight('bold');
-      }
-      sheet.getRange(2, colWeb, datos.length, 1).setValues(datos.map(f => [f[colWeb - 1]]));
+      [[colWeb, COLUMNA_APLICADO_WEB], [colFecha, COLUMNA_FECHA_CAMBIO_WEB]].forEach(([c, nombre]) => {
+        if (c > sheet.getMaxColumns()) sheet.insertColumnsAfter(sheet.getMaxColumns(), c - sheet.getMaxColumns());
+        if (!tieneValor_(sheet.getRange(1, c).getValue())) sheet.getRange(1, c).setValue(nombre).setFontWeight('bold');
+        sheet.getRange(2, c, datos.length, 1).setValues(datos.map(f => [f[c - 1]]));
+      });
+      sheet.getRange(2, colFecha, datos.length, 1).setNumberFormat('yyyy-mm-dd');
     }
     if (huboCambios) sheet.getRange(2, colEstado, estados.length, 1).setValues(estados);
     // Dropdown al día con el catálogo de Data (si se agregó un Estado nuevo,
@@ -506,6 +541,13 @@ function tieneValor_(v) {
 }
 
 /** Número de la celda, o NaN si está vacía o es texto (ej. "Sin sugerencias"). */
+/** Días enteros desde la fecha de la celda hasta hoy, o NaN si no es una fecha. */
+function diasDesde_(v) {
+  const fecha = v instanceof Date ? v : (tieneValor_(v) ? new Date(texto_(v)) : null);
+  if (!fecha || isNaN(fecha.getTime())) return NaN;
+  return Math.floor((Date.now() - fecha.getTime()) / 86400000);
+}
+
 function numero_(v) {
   if (typeof v === 'number') return v;
   const t = texto_(v);

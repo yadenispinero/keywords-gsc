@@ -51,6 +51,8 @@
  *  - Si no se pudo descargar ninguna página (sitio caído), no se toca nada.
  */
 const COLUMNA_APLICADO_WEB = 'Aplicado en web';
+/** Fecha del último cambio de COLUMNA_APLICADO_WEB (03/10/2026): desde ahí se cuenta la espera de medición. */
+const COLUMNA_FECHA_CAMBIO_WEB = 'Fecha cambio en web';
 
 const TABLA_VERIFICACION_WEB = {
   titulo: 'Verificación web',
