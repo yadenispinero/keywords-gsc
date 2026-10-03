@@ -74,7 +74,6 @@ function publicarPriorizadasEnBancoDeContenido() {
     temasNuevos.forEach(t => Logger.log('  - ' + t));
   }
   enviarResumenPorCorreo_(temasNuevos);
-  Logger.log('Correo resumen enviado a ' + emailResumen_() + '.');
 }
 
 function agregarPriorizadasAlBanco_() {
@@ -147,9 +146,5 @@ function enviarResumenPorCorreo_(temasNuevos) {
     cuerpo += '  - ' + estado + ': ' + totales[estado] + '\n';
   });
 
-  MailApp.sendEmail({
-    to: emailResumen_(),
-    subject: 'Keywords GSC — resumen ' + hoy,
-    body: cuerpo
-  });
+  enviarCorreo_('Keywords GSC — resumen ' + hoy, cuerpo);
 }

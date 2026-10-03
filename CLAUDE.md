@@ -77,6 +77,14 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   `CONFIG_BANCO`) — Hoja de cálculo y pestaña del banco de contenido.
   Valores de la instalación actual: `1vFLUuk3X0p_ldBnSuD1gs0zjTFaw6xPIidMcWXW8cJ0`
   y `Consultoria`.
+- `NOMBRE_INSTALACION` (opcional, 03/10/2026 — `enviarCorreo_()` en
+  `Code.js`) — si existe, el asunto de todos los correos va precedido de
+  `[<nombre>] `. Sirve para distinguir los correos cuando varias entidades
+  usan este mismo código.
+- `ULTIMO_CONTEO_ESTADOS` — **la escribe el script, no se carga a mano**.
+  Guarda el conteo por Estado de la última corrida real de
+  `evaluarEstados()`, para la columna "vs. corrida anterior" del correo.
+  Borrarla reinicia la comparación.
 
 ## Configuración funcional en la pestaña Data (03/10/2026)
 Lo que una instalación ajusta sin tocar código vive en **tablas de la
@@ -88,7 +96,12 @@ renombrar un encabezado no rompe nada, reordenar columnas sí.
 - **Reglas de Estado** (`TABLA_REGLAS_ESTADO`, Script7): Orden | Columna
   | Condición | Valor | Solo si Estado es | Estado resultante.
 - **Configuración de Estados** (`TABLA_CONFIG_ESTADOS`, Script7): Estado
-  | Requiere acción | Pasa al banco de contenido.
+  | Requiere acción | Pasa al banco de contenido | Filas de muestra en
+  correo. El orden de las filas es el orden en que aparecen en el correo.
+- **Correo resumen** (`TABLA_CORREO_RESUMEN`, Script7): Clave | Valor.
+  Textos del correo (para usarlo en otro idioma) y la opción "Enviar
+  aunque no haya cambios". Una clave que falte en la Hoja usa el valor por
+  defecto del código.
 - **Idiomas** (`TABLA_IDIOMAS`, Script2): Código | hl | gl | Prefijos de
   pregunta (separados por coma; la consulta sin prefijo va siempre).
 Siguen en columna A de Data, como antes: el catálogo de Estados (A2 hacia
@@ -120,6 +133,17 @@ Priorizada / "buscar long-tail" → Pendiente; Priorizada con volumen > 50
 - Qué Estados pasan al banco de contenido también sale de Configuración
   de Estados (columna "Pasa al banco de contenido"), no de Script5.
 - Sin trigger por código: crearlo a mano apuntando a `evaluarEstados`.
+- **Correo resumen** (HTML + versión en texto plano). Incluye:
+  - Tabla Estado × pestaña con el total y la diferencia contra la última
+    corrida real.
+  - Columna "Qué hacer", con la Description del catálogo de Estados.
+  - Enlaces a la Hoja, a cada pestaña y a cada fila de muestra.
+  - Cambios de Estado de esta corrida.
+  - Las primeras N filas de los Estados que tengan "Filas de muestra en
+    correo" > 0.
+  Con "Enviar aunque no haya cambios" = No, se salta el envío si no hubo
+  cambios de Estado y los totales son iguales a la corrida anterior. Por
+  defecto es Sí: el correo también sirve para saber que el trigger corre.
 
 ## Columnas por encabezado, nunca por posición (03/10/2026)
 Todas las pestañas se leen y escriben ubicando cada columna por su

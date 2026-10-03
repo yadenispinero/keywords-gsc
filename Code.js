@@ -148,7 +148,10 @@ function leerEstadosValidos_() {
  * valores con que se crea la tabla si todavía no existe (instalación
  * nueva); desde ahí la fuente de verdad es la Hoja. Las columnas se leen
  * por POSICIÓN y se devuelven con los nombres de `encabezados` — renombrar
- * un encabezado en la Hoja no rompe nada, reordenar columnas sí.
+ * un encabezado en la Hoja no rompe nada, reordenar columnas sí. Si en
+ * una versión nueva la definición suma una columna al final, se le pone el
+ * encabezado sola (completarEncabezadosData_) y sus celdas vacías se leen
+ * como "sin valor".
  */
 function leerTablaData_(definicion) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -159,6 +162,7 @@ function leerTablaData_(definicion) {
   if (!celda) celda = crearTablaData_(dataSheet, definicion);
 
   const ancho = definicion.encabezados.length;
+  completarEncabezadosData_(dataSheet, celda, definicion);
   const primeraFila = celda.getRow() + 2;
   const ultimaFila = dataSheet.getLastRow();
   if (ultimaFila < primeraFila) return [];
@@ -172,6 +176,14 @@ function leerTablaData_(definicion) {
     filas.push(objeto);
   }
   return filas;
+}
+
+/** Escribe los encabezados que falten (columnas agregadas al final de una tabla ya existente). */
+function completarEncabezadosData_(dataSheet, celda, definicion) {
+  const rango = dataSheet.getRange(celda.getRow() + 1, celda.getColumn(), 1, definicion.encabezados.length);
+  const actuales = rango.getValues()[0];
+  if (actuales.every(h => h !== '')) return;
+  rango.setValues([actuales.map((h, i) => h !== '' ? h : definicion.encabezados[i])]).setFontWeight('bold');
 }
 
 /**
@@ -601,4 +613,59 @@ function sumarConteos_(conteosPorHoja) {
     });
   });
   return totales;
+}
+
+/**
+ * Description de cada Estado (catálogo de Data: Estado en A, Description
+ * en B, desde la fila 2 hasta la primera vacía) → { estado: description }.
+ */
+function descripcionesEstados_() {
+  const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
+  const mapa = {};
+  if (!dataSheet || dataSheet.getLastRow() < 2) return mapa;
+  for (const [estado, descripcion] of dataSheet.getRange(2, 1, dataSheet.getLastRow() - 1, 2).getValues()) {
+    if (estado === '') break;
+    mapa[estado.toString().trim()] = descripcion.toString().trim();
+  }
+  return mapa;
+}
+
+/**
+ * Filas de una pestaña con su Estado → [{ fila, etiqueta, estado }].
+ * `etiqueta` = valor de la primera columna (Keyword / Pregunta). Para
+ * listar filas de muestra en los correos.
+ */
+function filasConEstado_(sheet) {
+  const colEstado = columnasPorEncabezado_(sheet)('Estado');
+  if (!colEstado || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues()
+    .map((f, i) => ({ fila: i + 2, etiqueta: f[0].toString().trim(), estado: f[colEstado - 1] }))
+    .filter(f => f.etiqueta !== '');
+}
+
+/**
+ * Envía un correo a EMAIL_RESUMEN. Si existe la Script Property opcional
+ * `NOMBRE_INSTALACION`, el asunto va precedido de "[<nombre>] " — para
+ * distinguir los correos cuando varias entidades usan este mismo código.
+ * `html` opcional; `texto` es la versión plana (clientes sin HTML).
+ */
+function enviarCorreo_(asunto, texto, html) {
+  const nombre = PropertiesService.getScriptProperties().getProperty('NOMBRE_INSTALACION');
+  const opciones = {
+    to: emailResumen_(),
+    subject: (nombre ? '[' + nombre + '] ' : '') + asunto,
+    body: texto
+  };
+  if (html) opciones.htmlBody = html;
+  MailApp.sendEmail(opciones);
+  Logger.log('Correo "' + opciones.subject + '" enviado a ' + opciones.to + '.');
+}
+
+function escaparHtml_(texto) {
+  return texto.toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Enlace a una pestaña (y opcionalmente a una fila) de esta Hoja de cálculo. */
+function urlPestana_(sheet, fila) {
+  return sheet.getParent().getUrl() + '#gid=' + sheet.getSheetId() + (fila ? '&range=A' + fila : '');
 }
