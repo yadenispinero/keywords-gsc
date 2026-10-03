@@ -77,10 +77,6 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   `CONFIG_BANCO`) — Hoja de cálculo y pestaña del banco de contenido.
   Valores de la instalación actual: `1vFLUuk3X0p_ldBnSuD1gs0zjTFaw6xPIidMcWXW8cJ0`
   y `Consultoria`.
-- `SITEMAP_URL` (opcional, 03/10/2026 — Script8) — sitemap del sitio
-  (ej. `https://www.yfokus.de/sitemap.xml`). Solo sirve para avisar en
-  el correo de páginas publicadas que no están registradas en
-  `Paginas_Sitio`. Sin ella no hay aviso, pero la verificación funciona.
 - `PAGINAS_SPREADSHEET_ID` (opcional) — Hoja con la pestaña de páginas
   del sitio. Si falta, se usa `BANCO_SPREADSHEET_ID`, porque hoy
   `Paginas_Sitio` vive en la misma Hoja que el banco.
@@ -193,6 +189,11 @@ Escribe:
   Si la keyword desaparece del sitio, se vacía.
 - **`Paginas_Sitio`**, columna `Keywords aplicadas (verificado)`: por
   página, las keywords que contiene, con sus idiomas.
+
+El correo avisa de las páginas del sitemap que no están registradas. El
+sitemap sale de la propia lista: el `robots.txt` de cada dominio
+registrado, o `/sitemap.xml` si no declara ninguno. No hay Script
+Property para esto.
 
 Las filas en "Descartada" no se verifican; la lista está en "No
 verificar Estados". La **regla 9** (`Aplicado en web | tiene valor →

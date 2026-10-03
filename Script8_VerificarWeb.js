@@ -34,9 +34,11 @@
  *  - En la pestaña de páginas, la columna "Columna de keywords aplicadas"
  *    recibe, por página, las keywords investigadas que contiene (con sus
  *    idiomas). Solo en corridas reales.
- *  - Si existe la Script Property SITEMAP_URL, el correo avisa de las rutas
- *    del sitemap que no están registradas en la pestaña de páginas (menos
- *    "Excluir rutas del aviso").
+ *  - El correo avisa de las rutas del sitemap que no están registradas en
+ *    la pestaña de páginas (menos "Excluir rutas del aviso"). El sitemap
+ *    sale de la propia lista: por cada dominio de las URLs registradas se
+ *    lee su robots.txt (líneas "Sitemap:") y, si no indica ninguno, se usa
+ *    <dominio>/sitemap.xml. Sin Script Property (03/10/2026).
  *  - Si no se pudo descargar ninguna página (sitio caído), no se toca nada.
  */
 const COLUMNA_APLICADO_WEB = 'Aplicado en web';
@@ -137,22 +139,38 @@ function paginasWeb_() {
   return paginas;
 }
 
-/** Rutas del sitemap (Script Property SITEMAP_URL, opcional) que no están en la pestaña de páginas → avisos. */
+/**
+ * Rutas de los sitemaps del sitio que no están en la pestaña de páginas →
+ * avisos. Los sitemaps salen de los dominios de las URLs registradas: su
+ * robots.txt ("Sitemap: ...") o, si no indica ninguno, /sitemap.xml.
+ */
 function avisarPaginasSinRegistrar_(destinos, opciones) {
-  const sitemap = PropertiesService.getScriptProperties().getProperty('SITEMAP_URL');
-  if (!sitemap) return;
-  const respuesta = UrlFetchApp.fetch(sitemap, { muteHttpExceptions: true });
-  if (respuesta.getResponseCode() !== 200) {
-    verificacionWeb_.avisos.push('No se pudo leer el sitemap (' + respuesta.getResponseCode() + ').');
-    return;
-  }
   const ruta = url => (url.replace(/^https?:\/\/[^\/]+/, '').replace(/\/+$/, '') || '/');
+  const origenes = destinos.map(d => d.url.match(/^https?:\/\/[^\/]+/)[0])
+    .filter((o, i, todos) => todos.indexOf(o) === i);
   const registradas = destinos.map(d => ruta(d.url));
-  (respuesta.getContentText().match(/<loc>[^<]+<\/loc>/g) || [])
-    .map(loc => ruta(loc.replace(/<\/?loc>/g, '').trim()))
-    .filter(r => registradas.indexOf(r) === -1)
-    .filter(r => !opciones.excluirAviso.some(ex => r === ex || r.indexOf(ex + '/') === 0))
-    .forEach(r => verificacionWeb_.avisos.push('Publicada pero sin registrar en "' + opciones.pestana + '": ' + r));
+
+  origenes.forEach(origen => {
+    const robots = UrlFetchApp.fetch(origen + '/robots.txt', { muteHttpExceptions: true });
+    const declarados = robots.getResponseCode() === 200
+      ? (robots.getContentText().match(/^\s*sitemap:\s*(\S+)/gim) || []).map(l => l.replace(/^\s*sitemap:\s*/i, '').trim())
+      : [];
+    const sitemaps = (declarados.length > 0 ? declarados : [origen + '/sitemap.xml'])
+      .filter((u, i, todos) => todos.indexOf(u) === i);
+
+    sitemaps.forEach(sitemap => {
+      const respuesta = UrlFetchApp.fetch(sitemap, { muteHttpExceptions: true });
+      if (respuesta.getResponseCode() !== 200) {
+        verificacionWeb_.avisos.push('No se pudo leer el sitemap ' + sitemap + ' (' + respuesta.getResponseCode() + ').');
+        return;
+      }
+      (respuesta.getContentText().match(/<loc>[^<]+<\/loc>/g) || [])
+        .map(loc => ruta(loc.replace(/<\/?loc>/g, '').trim()))
+        .filter(r => registradas.indexOf(r) === -1)
+        .filter(r => !opciones.excluirAviso.some(ex => r === ex || r.indexOf(ex + '/') === 0))
+        .forEach(r => verificacionWeb_.avisos.push('Publicada pero sin registrar en "' + opciones.pestana + '": ' + r));
+    });
+  });
 }
 
 /** HTML → { title, keywords, descripcion, cuerpo }, cada uno normalizado y rodeado de espacios. */
