@@ -2,7 +2,9 @@
  * === CONFIGURACIÓN LOCAL DE ESTE SCRIPT (puente hacia el banco de contenido) ===
  * Conecta el resultado de [A.1] con el flujo de contenido: las preguntas
  * de "Preguntas" (Paso 2, temas nuevos que no tienen página todavía) que
- * lleguen a Estado "Priorizada" se agregan como fila mínima a la pestaña
+ * lleguen a un Estado de CONFIG_BANCO.ESTADOS_PARA_BANCO ("Priorizada", o
+ * su variante "Por optimizar — urgente" que asigna evaluarEstados() cuando
+ * el volumen es alto) se agregan como fila mínima a la pestaña
  * "Consultoria" del banco de contenido (otra Hoja distinta, por ID).
  *
  * Las keywords de "Seguimiento" (Paso 1) NO se mandan aquí — ya tienen
@@ -13,7 +15,7 @@
  * fila nueva) y el email de resumen NO viven en el código — identifican
  * la instalación concreta, viven en Script Properties (⚙️ Configuración
  * del proyecto → Script Properties): `DEFAULT_ESPACIO`, `DEFAULT_CANALES`,
- * `EMAIL_RESUMEN`. Deben coincidir literalmente con los catálogos de la
+ * `EMAIL_RESUMEN` (vía emailResumen_() en Code.js). Deben coincidir literalmente con los catálogos de la
  * pestaña de nomencladores del banco de contenido (columnas Espacios /
  * Canales) — si cambian esos catálogos, actualizar la Script Property.
  * `Estrategia` por defecto sí queda en `CONFIG_BANCO` — no identifica
@@ -38,7 +40,10 @@ const CONFIG_BANCO = {
   // No identifica ninguna empresa — solo la categoría de embudo por
   // defecto para contenido nuevo. Ajustar aquí si cambia el catálogo de
   // Estrategia en Nomencladores.
-  DEFAULT_ESTRATEGIA: '02. Contenidos TOFU'
+  DEFAULT_ESTRATEGIA: '02. Contenidos TOFU',
+
+  // Estados de "Preguntas" que pasan al banco de contenido.
+  ESTADOS_PARA_BANCO: ['Priorizada', 'Por optimizar — urgente']
 };
 
 /**
@@ -58,30 +63,22 @@ function valoresPorDefectoBanco_() {
   };
 }
 
-function emailResumenBanco_() {
-  const valor = PropertiesService.getScriptProperties().getProperty('EMAIL_RESUMEN');
-  if (!valor) {
-    throw new Error('Falta configurar la Script Property "EMAIL_RESUMEN" (⚙️ Configuración del '
-      + 'proyecto → Script Properties) con el correo destino del resumen.');
-  }
-  return valor;
-}
-
 /**
  * Función principal: agrega al banco de contenido las preguntas nuevas
- * en Estado "Priorizada", y manda un correo resumen con lo agregado +
+ * en Estado "Priorizada" (o "Por optimizar — urgente"), y manda un correo resumen con lo agregado +
  * el total de filas por Estado en "Seguimiento" y "Preguntas".
  */
 function publicarPriorizadasEnBancoDeContenido() {
   const temasNuevos = agregarPriorizadasAlBanco_();
   if (temasNuevos.length === 0) {
-    Logger.log('Sin novedades: ninguna pregunta en Estado "Priorizada" que no estuviera ya en el banco.');
+    Logger.log('Sin novedades: ninguna pregunta en Estado ' + CONFIG_BANCO.ESTADOS_PARA_BANCO.join(' / ')
+      + ' que no estuviera ya en el banco.');
   } else {
     Logger.log('Agregadas ' + temasNuevos.length + ' fila(s) nueva(s) a "' + CONFIG_BANCO.HOJA_BANCO + '":');
     temasNuevos.forEach(t => Logger.log('  - ' + t));
   }
   enviarResumenPorCorreo_(temasNuevos);
-  Logger.log('Correo resumen enviado a ' + emailResumenBanco_() + '.');
+  Logger.log('Correo resumen enviado a ' + emailResumen_() + '.');
 }
 
 function agregarPriorizadasAlBanco_() {
@@ -113,10 +110,11 @@ function agregarPriorizadasAlBanco_() {
     });
   }
 
+  const c = columnasObligatorias_(preguntas, ['Pregunta', 'Estado']);
   const temasNuevos = [];
-  preguntas.getRange(2, 1, preguntas.getLastRow() - 1, 11).getValues().forEach(fila => {
-    const pregunta = fila[0], estado = fila[10];
-    if (estado !== 'Priorizada') return;
+  preguntas.getRange(2, 1, preguntas.getLastRow() - 1, preguntas.getLastColumn()).getValues().forEach(fila => {
+    const pregunta = fila[c['Pregunta'] - 1].toString().trim(), estado = fila[c['Estado'] - 1];
+    if (!pregunta || CONFIG_BANCO.ESTADOS_PARA_BANCO.indexOf(estado) === -1) return;
     if (temasExistentes[pregunta.toLowerCase()]) return;
     temasExistentes[pregunta.toLowerCase()] = true;
     temasNuevos.push(pregunta);
@@ -135,30 +133,8 @@ function agregarPriorizadasAlBanco_() {
   return temasNuevos;
 }
 
-/**
- * Cuenta las filas por Estado en "Seguimiento" (columna 13) y "Preguntas"
- * (columna 11) de esta misma Hoja, combinadas en un solo total.
- */
-function contarPorEstado_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const totales = {};
-
-  const sumar = (nombreHoja, columnaEstado) => {
-    const sheet = ss.getSheetByName(nombreHoja);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    sheet.getRange(2, columnaEstado, sheet.getLastRow() - 1, 1).getValues().forEach(f => {
-      const estado = f[0] || '(vacío)';
-      totales[estado] = (totales[estado] || 0) + 1;
-    });
-  };
-
-  sumar(CONFIG.NOMBRE_HOJA_SEGUIMIENTO, 13);
-  sumar(CONFIG_PREGUNTAS.HOJA_PREGUNTAS, 11);
-  return totales;
-}
-
 function enviarResumenPorCorreo_(temasNuevos) {
-  const totales = contarPorEstado_();
+  const totales = sumarConteos_(contarPorEstado_(hojasConEstado_()));
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
   let cuerpo = 'Resumen de investigación de keywords — ' + hoy + '\n\n';
@@ -166,7 +142,7 @@ function enviarResumenPorCorreo_(temasNuevos) {
   cuerpo += 'Propuestas de contenido nuevas agregadas al banco (pestaña "'
     + CONFIG_BANCO.HOJA_BANCO + '"):\n';
   cuerpo += temasNuevos.length === 0
-    ? '  (ninguna esta vez — no hay preguntas nuevas en Estado "Priorizada")\n'
+    ? '  (ninguna esta vez — no hay preguntas nuevas en Estado ' + CONFIG_BANCO.ESTADOS_PARA_BANCO.join(' / ') + ')\n'
     : temasNuevos.map(t => '  - ' + t).join('\n') + '\n';
 
   cuerpo += '\nTotal de keywords/preguntas pendientes por Estado (Seguimiento + Preguntas):\n';
@@ -175,7 +151,7 @@ function enviarResumenPorCorreo_(temasNuevos) {
   });
 
   MailApp.sendEmail({
-    to: emailResumenBanco_(),
+    to: emailResumen_(),
     subject: 'Keywords GSC — resumen ' + hoy,
     body: cuerpo
   });

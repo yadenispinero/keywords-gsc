@@ -38,27 +38,20 @@
  * activa, y ese puntero quedó apuntando a un ID de una pestaña "Preguntas"
  * vieja ya borrada (la actual tiene otro ID). SpreadsheetApp.openById()
  * abre el archivo directo por su ID real, sin depender de ese puntero. El
- * ID vive en Script Properties (SPREADSHEET_ID, vía configDato_() en
- * Code.gs) -- no hardcodeado, mismo criterio que el resto del proyecto.
+ * ID vive en Script Properties (SPREADSHEET_ID, vía hojaDeCalculo_() en
+ * Code.js) -- no hardcodeado, mismo criterio que el resto del proyecto.
  *
  * Para programarla luego: Activadores (reloj, barra izquierda) -> Añadir
  * activador -> función "validarPreguntasExistentes" -> tiempo que decidas.
  */
 function validarPreguntasExistentes() {
-  const sheet = SpreadsheetApp.openById(configDato_('SPREADSHEET_ID')).getSheetByName(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
+  const sheet = hojaDeCalculo_().getSheetByName(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
   if (!sheet) { Logger.log('No existe la pestaña "Preguntas".'); return; }
 
   const numFilas = sheet.getLastRow();
   if (numFilas < 2) { Logger.log('"Preguntas" no tiene filas de datos.'); return; }
 
-  const encabezados = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const col = {};
-  encabezados.forEach((nombre, i) => { col[nombre.toString().trim()] = i + 1; });
-
-  const requeridas = ['Pregunta', 'Idioma', 'Posición autocompletado', 'Fecha detectada'];
-  for (const nombre of requeridas) {
-    if (!col[nombre]) { Logger.log('Falta la columna "' + nombre + '" en "Preguntas".'); return; }
-  }
+  const col = columnasObligatorias_(sheet, ['Pregunta', 'Idioma', 'Posición autocompletado', 'Fecha detectada']);
 
   const datos = sheet.getRange(2, 1, numFilas - 1, sheet.getLastColumn()).getValues();
   const hoy = new Date();

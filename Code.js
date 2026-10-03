@@ -35,6 +35,105 @@ function configDato_(clave) {
 }
 
 /**
+ * Abre esta Hoja de cálculo por su ID (Script Property `SPREADSHEET_ID`),
+ * no con getActiveSpreadsheet() — ver FIX 13/09/2026-B en
+ * Script6_ValidarPreguntas.js (puntero interno a una pestaña ya borrada).
+ */
+function hojaDeCalculo_() {
+  return SpreadsheetApp.openById(configDato_('SPREADSHEET_ID'));
+}
+
+/**
+ * Correo destino de los resúmenes (Script Property `EMAIL_RESUMEN`).
+ * Compartido por publicarPriorizadasEnBancoDeContenido() y evaluarEstados().
+ */
+function emailResumen_() {
+  return configDato_('EMAIL_RESUMEN');
+}
+
+/**
+ * Pestañas que llevan columna "Estado" — las que cuentan los resúmenes
+ * por correo. Función (no constante) para no depender del orden en que
+ * Apps Script carga los archivos.
+ */
+function hojasConEstado_() {
+  return [CONFIG.NOMBRE_HOJA_SEGUIMIENTO, CONFIG_PREGUNTAS.HOJA_PREGUNTAS];
+}
+
+/**
+ * Localiza columnas por ENCABEZADO (fila 1), no por posición fija — las
+ * pestañas se reordenan a mano seguido (02/10/2026: en Seguimiento
+ * "Volumen mensual" pasó delante de "Acción propuesta" y el código, que
+ * escribía por posición, iba a poner la fórmula en la columna de Volumen).
+ * Devuelve una función `col(nombre)` → número de columna (1-based), o 0 si
+ * no existe. Compara sin tildes ni mayúsculas, y si no hay coincidencia
+ * exacta acepta un encabezado que EMPIECE por `nombre` — así "Top 10
+ * dominios" encuentra tanto "Top 10 dominios" (Preguntas) como "Top 10
+ * dominios (Paso 4)" (Seguimiento).
+ */
+function columnasPorEncabezado_(sheet) {
+  const norm = t => t.toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const encabezados = sheet.getLastColumn() > 0
+    ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(norm)
+    : [];
+  return nombre => {
+    const buscado = norm(nombre);
+    let i = encabezados.indexOf(buscado);
+    if (i === -1) i = encabezados.findIndex(h => h !== '' && h.indexOf(buscado) === 0);
+    return i + 1;
+  };
+}
+
+/** Igual que columnasPorEncabezado_, pero lanza un error claro si falta alguna. */
+function columnasObligatorias_(sheet, nombres) {
+  const col = columnasPorEncabezado_(sheet);
+  const mapa = {};
+  nombres.forEach(n => {
+    mapa[n] = col(n);
+    if (!mapa[n]) throw new Error('Falta la columna "' + n + '" en "' + sheet.getName() + '".');
+  });
+  return mapa;
+}
+
+function letraColumna_(numero) {
+  let letra = '';
+  while (numero > 0) {
+    const resto = (numero - 1) % 26;
+    letra = String.fromCharCode(65 + resto) + letra;
+    numero = Math.floor((numero - 1) / 26);
+  }
+  return letra;
+}
+
+/**
+ * Lee un bloque de la columna A de "Data": los valores que siguen a la
+ * celda `encabezado`, hasta la primera vacía. Así las listas de Data se
+ * pueden mover de fila sin tocar código (antes el dropdown de competencia
+ * leía Data!A13:A14 fijo, y la lista real ya estaba en A15:A16 — el
+ * dropdown dejaba de aplicarse sin avisar). Sin `encabezado`, lee el
+ * primer bloque (A2 hacia abajo: el catálogo de Estados).
+ */
+function leerBloqueData_(encabezado) {
+  const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
+  if (!dataSheet || dataSheet.getLastRow() < 2) return [];
+  const valores = dataSheet.getRange(1, 1, dataSheet.getLastRow(), 1).getValues()
+    .map(f => f[0].toString().trim());
+  let inicio = 1;
+  if (encabezado) {
+    inicio = valores.indexOf(encabezado) + 1;
+    if (inicio === 0) return [];
+  }
+  const bloque = [];
+  for (let i = inicio; i < valores.length && valores[i] !== ''; i++) bloque.push(valores[i]);
+  return bloque;
+}
+
+/** Catálogo de Estados válidos (Data, primer bloque de la columna A). */
+function leerEstadosValidos_() {
+  return leerBloqueData_();
+}
+
+/**
  * Lee la propiedad de Search Console a consultar desde Script Properties.
  * Debe coincidir EXACTO con la propiedad verificada en Search Console.
  * Dos formatos posibles según cómo esté verificada la propiedad:
@@ -162,51 +261,80 @@ function redondearPosicion_(position) {
 }
 
 /**
- * Columnas de Seguimiento (reordenado 12/09/2026 a pedido del usuario, y
- * de nuevo el mismo día para absorber lo que era la pestaña "Competencia"
- * — se eliminó esa pestaña separada porque toda keyword que se evaluaba
- * ahí ya vivía en Seguimiento/Preguntas, era redundante):
- * Keyword | Categoría | Impresiones | CTR | Posición | Acción propuesta
- * (fórmula, columna F) | Volumen mensual (Keyword Surfer) | Top 10
- * dominios (Paso 4) | Fecha evaluación competencia | Acción sugerida
- * (competencia) | Fecha detectada | Última actualización | Estado |
- * Notas (fórmula, columna N). Acción propuesta y Notas son fórmulas que
- * se recalculan solas — el script nunca las toca en filas existentes.
- * Notas arranca con la Description de esa Acción propuesta (VLOOKUP
- * contra Data!A:B); si se escribe texto a mano encima, esa celda
- * puntual deja de ser fórmula y queda su nota manual — el resto sigue
- * actualizándose solo. Volumen mensual, Top 10 dominios, Fecha evaluación
- * competencia, Acción sugerida y Estado son 100% manuales (Paso 3/4). Si
- * la keyword ya existe, solo se refrescan las columnas de datos de GSC
+ * Encabezados de Seguimiento, en el orden con que se crea la pestaña desde
+ * cero. Una vez creada, el orden real lo decide la persona que la usa —
+ * el código ubica cada columna por su encabezado (columnasPorEncabezado_),
+ * nunca por posición.
+ */
+const COLUMNAS_SEGUIMIENTO = [
+  'Keyword', 'Categoría', 'Impresiones', 'CTR', 'Posición', 'Volumen mensual (Keyword Surfer)',
+  'Acción propuesta', 'Top 10 dominios (Paso 4)', 'Fecha evaluación competencia',
+  'Acción sugerida (competencia)', 'Fecha detectada', 'Última actualización', 'Estado', 'Notas'
+];
+
+/**
+ * Seguimiento absorbió lo que era la pestaña "Competencia" (12/09/2026 —
+ * era redundante). Acción propuesta y Notas son fórmulas que se
+ * recalculan solas — el script nunca las toca en filas existentes. Notas
+ * arranca con la Description de esa Acción propuesta (VLOOKUP contra
+ * Data!A:B); si se escribe texto a mano encima, esa celda puntual deja de
+ * ser fórmula y queda su nota manual. Volumen mensual, Top 10 dominios,
+ * Fecha evaluación competencia y Acción sugerida son manuales (Paso 3/4);
+ * Estado lo ajusta evaluarEstados() (Script7_EvaluarEstados.js) o a mano.
+ * Si la keyword ya existe, solo se refrescan las columnas de datos de GSC
  * (Categoría, Impresiones, CTR, Posición, Última actualización) — nunca
  * se pisa el trabajo manual de Paso 3/4.
+ *
+ * FIX 03/10/2026: escribía por posición fija (14 columnas en orden). La
+ * pestaña real ya tenía "Volumen mensual" delante de "Acción propuesta",
+ * así que cada keyword nueva habría quedado con la fórmula en la columna
+ * de Volumen y Notas apuntando a la columna equivocada. Ahora cada valor
+ * va a la columna con su encabezado.
  */
 function actualizarSeguimiento_(priorizadas, fechaStr) {
   const sheet = obtenerOCrearHojaSeguimiento_();
+  const c = columnasObligatorias_(sheet, COLUMNAS_SEGUIMIENTO);
+  const letras = {
+    impresiones: letraColumna_(c['Impresiones']),
+    ctr: letraColumna_(c['CTR']),
+    posicion: letraColumna_(c['Posición']),
+    accion: letraColumna_(c['Acción propuesta'])
+  };
   const numFilas = sheet.getLastRow();
   const keywordsExistentes = numFilas > 1
-    ? sheet.getRange(2, 1, numFilas - 1, 1).getValues().map(f => f[0])
+    ? sheet.getRange(2, c['Keyword'], numFilas - 1, 1).getValues().map(f => f[0])
     : [];
 
   priorizadas.forEach(r => {
     const fila = keywordsExistentes.indexOf(r.query);
     if (fila === -1) {
       const filaNueva = sheet.getLastRow() + 1;
-      sheet.getRange(filaNueva, 1, 1, 14).setValues([[
-        r.query, r.categoria, r.impressions, r.ctr, redondearPosicion_(r.position),
-        formulaAccionPropuesta_(filaNueva), '', '', '', '', fechaStr, fechaStr, 'Pendiente', formulaNotas_(filaNueva)
-      ]]);
-      sheet.getRange(filaNueva, 4).setNumberFormat('0.00%');
-      sheet.getRange(filaNueva, 5).setNumberFormat('0.0');
-      aplicarValidacionEstado_(sheet, filaNueva, 1, 13);
-      aplicarValidacionAccionCompetencia_(sheet, filaNueva, 1, 10);
+      const valores = {
+        'Keyword': r.query,
+        'Categoría': r.categoria,
+        'Impresiones': r.impressions,
+        'CTR': r.ctr,
+        'Posición': redondearPosicion_(r.position),
+        'Acción propuesta': formulaAccionPropuesta_(filaNueva, letras),
+        'Fecha detectada': fechaStr,
+        'Última actualización': fechaStr,
+        'Estado': 'Pendiente',
+        'Notas': formulaNotas_(filaNueva, letras.accion)
+      };
+      const filaValores = new Array(sheet.getLastColumn()).fill('');
+      Object.keys(valores).forEach(nombre => { filaValores[c[nombre] - 1] = valores[nombre]; });
+      sheet.getRange(filaNueva, 1, 1, filaValores.length).setValues([filaValores]);
+      sheet.getRange(filaNueva, c['CTR']).setNumberFormat('0.00%');
+      sheet.getRange(filaNueva, c['Posición']).setNumberFormat('0.0');
+      aplicarValidacionEstado_(sheet, filaNueva, 1, c['Estado']);
+      aplicarValidacionAccionCompetencia_(sheet, filaNueva, 1, c['Acción sugerida (competencia)']);
     } else {
       const filaSheet = fila + 2;
-      sheet.getRange(filaSheet, 2).setValue(r.categoria);
-      sheet.getRange(filaSheet, 3).setValue(r.impressions);
-      sheet.getRange(filaSheet, 4).setNumberFormat('0.00%').setValue(r.ctr);
-      sheet.getRange(filaSheet, 5).setNumberFormat('0.0').setValue(redondearPosicion_(r.position));
-      sheet.getRange(filaSheet, 12).setValue(fechaStr); // Última actualización
+      sheet.getRange(filaSheet, c['Categoría']).setValue(r.categoria);
+      sheet.getRange(filaSheet, c['Impresiones']).setValue(r.impressions);
+      sheet.getRange(filaSheet, c['CTR']).setNumberFormat('0.00%').setValue(r.ctr);
+      sheet.getRange(filaSheet, c['Posición']).setNumberFormat('0.0').setValue(redondearPosicion_(r.position));
+      sheet.getRange(filaSheet, c['Última actualización']).setValue(fechaStr);
     }
   });
 }
@@ -224,7 +352,7 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
  * cubiertas, candidatas de schema, etc.) se documentan a mano en Notas y
  * se marcan en Estado.
  */
-function formulaAccionPropuesta_(fila) {
+function formulaAccionPropuesta_(fila, letras) {
   // Separador de argumentos ";" (no ","): la Hoja está en configuración
   // regional alemana, donde "," es el separador decimal y ";" separa
   // argumentos de función — con "," las fórmulas daban "Fehler beim
@@ -235,25 +363,26 @@ function formulaAccionPropuesta_(fila) {
   // silenciosamente, el error caía en el IFERROR de afuera y la fórmula
   // siempre daba vacío. Ahora CTR se guarda como número real (ver
   // actualizarSeguimiento_/escribirPestañaDelDia_), no hace falta parsear.
-  const f = fila;
+  // Letras de columna calculadas por encabezado (ver actualizarSeguimiento_).
+  const P = letras.posicion + fila, D = letras.ctr + fila, I = letras.impresiones + fila;
   return '=IFERROR(IFS('
-    + 'AND(E' + f + '<=Data!$F$2;D' + f + '<=Data!$G$2/100;C' + f + '>=Data!$H$2);Data!$J$2;'
-    + 'AND(E' + f + '>=Data!$E$3;E' + f + '<=Data!$F$3;D' + f + '<=Data!$G$3/100;C' + f + '>=Data!$H$3);Data!$J$3;'
-    + 'AND(E' + f + '>=Data!$E$4;C' + f + '>=Data!$H$4);Data!$J$4;'
-    + 'AND(E' + f + '<=Data!$F$5;C' + f + '<=Data!$I$5);Data!$J$5;'
-    + 'AND(E' + f + '>=Data!$E$6;C' + f + '<=Data!$I$6);Data!$J$6;'
+    + 'AND(' + P + '<=Data!$F$2;' + D + '<=Data!$G$2/100;' + I + '>=Data!$H$2);Data!$J$2;'
+    + 'AND(' + P + '>=Data!$E$3;' + P + '<=Data!$F$3;' + D + '<=Data!$G$3/100;' + I + '>=Data!$H$3);Data!$J$3;'
+    + 'AND(' + P + '>=Data!$E$4;' + I + '>=Data!$H$4);Data!$J$4;'
+    + 'AND(' + P + '<=Data!$F$5;' + I + '<=Data!$I$5);Data!$J$5;'
+    + 'AND(' + P + '>=Data!$E$6;' + I + '<=Data!$I$6);Data!$J$6;'
     + 'TRUE;""'
     + ');"")';
 }
 
 /**
  * Fórmula de "Notas": carga sola la Description de Data!A:B que
- * corresponde a la Acción propuesta (columna F) de la misma fila — mismo
+ * corresponde a la Acción propuesta (columna `letraAccion`) de la misma fila — mismo
  * vocabulario controlado que el dropdown de Estado, sin duplicar texto.
  * Separador ";" por el locale alemán de la Hoja (ver formulaAccionPropuesta_).
  */
-function formulaNotas_(fila) {
-  return '=IFERROR(VLOOKUP(F' + fila + ';Data!A:B;2;FALSE);"")';
+function formulaNotas_(fila, letraAccion) {
+  return '=IFERROR(VLOOKUP(' + letraAccion + fila + ';Data!A:B;2;FALSE);"")';
 }
 
 /**
@@ -271,17 +400,28 @@ function asegurarReglasAccionEnData_() {
 
   if (dataSheet.getRange('A1').getValue() === '') {
     dataSheet.getRange('A1:B1').setValues([['Estado', 'Description']]);
-    dataSheet.getRange('A2:B8').setValues([
+    dataSheet.getRange('A2:B9').setValues([
       ['Por optimizar', 'Ya apareces en el top pero el CTR es bajo — revisar title/meta/snippet de esa página. Prioridad más alta cuanto más arriba esté la posición.'],
       ['Por investigar volumen', 'Candidata que aún no pasó por Keyword Surfer (Paso 3).'],
       ['Por evaluar competencia', 'Ya tiene volumen, falta ver competencia en GSDE (Paso 4).'],
       ['Priorizada', 'Ya pasó los 4 pasos, lista para anexo-keywords-y-entidades.md.'],
       ['Descartada', 'Se decidió no perseguir (volumen insignificante, ruido, o duplicado de otra keyword ya cubierta).'],
       ['Pendiente', 'Recién escrito.'],
+      ['Por optimizar — urgente', 'Priorizada con volumen alto (ver CONFIG_EVALUACION.UMBRAL_VOLUMEN_URGENTE) — atender primero.'],
       ['Por mejorar contenido/ranking', 'El ranking es el problema, no el snippet — requiere contenido más fuerte, enlaces internos o revisar schema/entidad.']
     ]);
     dataSheet.getRange('A1:B1').setFontWeight('bold');
     dataSheet.autoResizeColumns(1, 2);
+  }
+
+  if (leerBloqueData_(ENCABEZADO_ACCIONES_COMPETENCIA).length === 0) {
+    const fila = dataSheet.getLastRow() + 3;
+    dataSheet.getRange(fila, 1, 3, 2).setValues([
+      [ENCABEZADO_ACCIONES_COMPETENCIA, ''],
+      ['competir de frente', 'Los dominios del top no son inalcanzables — optimizar/crear contenido apuntando directo a esta keyword.'],
+      ['buscar long-tail', 'El top está copado por dominios grandes — buscar una variante más específica con menos competencia.']
+    ]);
+    dataSheet.getRange(fila, 1).setFontWeight('bold');
   }
 
   if (dataSheet.getRange('D1').getValue() !== 'Regla') {
@@ -303,15 +443,15 @@ function asegurarReglasAccionEnData_() {
 /**
  * Aplica el dropdown de Estado (columna `columna`) validado contra la
  * lista de la pestaña "Data" (columna A, desde la fila 2). Compartida
- * entre Script1 (Seguimiento, columna 9) y Script2 (Preguntas, columna
- * 4) — mismo vocabulario de Estados en toda la Hoja.
+ * entre Seguimiento y Preguntas — mismo vocabulario de Estados en toda la
+ * Hoja.
  * setAllowInvalid(true): si la celda ya tuviera algo que no calza con la
  * lista, solo lo marca visualmente (triángulo de advertencia) en vez de
  * romper el script. Si la pestaña "Data" no existe todavía, no falla —
  * no aplica validación.
  */
 function aplicarValidacionEstado_(sheet, filaInicio, numFilas, columna) {
-  if (numFilas === 0) return;
+  if (numFilas === 0 || !columna) return;
   const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
   if (!dataSheet) return;
   const numEstados = dataSheet.getRange('A2:A').getValues().filter(f => f[0] !== '').length;
@@ -323,21 +463,23 @@ function aplicarValidacionEstado_(sheet, filaInicio, numFilas, columna) {
   sheet.getRange(filaInicio, columna, numFilas, 1).setDataValidation(rule);
 }
 
+/** Encabezado, en Data columna A, de la lista de Acción sugerida (competencia). */
+const ENCABEZADO_ACCIONES_COMPETENCIA = 'Estado evaluacion de competencia';
+
 /**
  * Dropdown de "Acción sugerida (competencia)" — validado contra la lista
- * corta armada a mano en Data!A13:A14 ("competir de frente" /
- * "buscar long-tail"), distinta del dropdown general de Estado. Si esa
- * lista no está ahí (sitio nuevo, o se movió), no falla — solo
- * no aplica validación.
+ * corta de Data que sigue al encabezado ENCABEZADO_ACCIONES_COMPETENCIA
+ * ("competir de frente" / "buscar long-tail"), distinta del dropdown
+ * general de Estado. FIX 03/10/2026: antes leía Data!A13:A14 fijo y la
+ * lista ya estaba en A15:A16 — el dropdown no se aplicaba. Si la lista no
+ * existe, no falla — solo no aplica validación.
  */
 function aplicarValidacionAccionCompetencia_(sheet, filaInicio, numFilas, columna) {
-  if (numFilas === 0) return;
-  const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
-  if (!dataSheet) return;
-  const valores = dataSheet.getRange('A13:A14').getValues().filter(f => f[0] !== '');
+  if (numFilas === 0 || !columna) return;
+  const valores = leerBloqueData_(ENCABEZADO_ACCIONES_COMPETENCIA);
   if (valores.length === 0) return;
   const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(valores.map(f => f[0]), true)
+    .requireValueInList(valores, true)
     .setAllowInvalid(true)
     .build();
   sheet.getRange(filaInicio, columna, numFilas, 1).setDataValidation(rule);
@@ -351,68 +493,42 @@ function obtenerOCrearHojaSeguimiento_() {
   if (sheet) return sheet;
 
   sheet = ss.insertSheet(CONFIG.NOMBRE_HOJA_SEGUIMIENTO, 0);
-  sheet.appendRow([
-    'Keyword', 'Categoría', 'Impresiones', 'CTR', 'Posición', 'Acción propuesta',
-    'Volumen mensual (Keyword Surfer)', 'Top 10 dominios (Paso 4)', 'Fecha evaluación competencia',
-    'Acción sugerida (competencia)', 'Fecha detectada', 'Última actualización', 'Estado', 'Notas'
-  ]);
-  sheet.getRange(1, 1, 1, 14).setFontWeight('bold');
+  sheet.appendRow(COLUMNAS_SEGUIMIENTO);
+  sheet.getRange(1, 1, 1, COLUMNAS_SEGUIMIENTO.length).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 14);
+  sheet.autoResizeColumns(1, COLUMNAS_SEGUIMIENTO.length);
   return sheet;
 }
 
 /**
- * ÚNICA VEZ (12/09/2026): aplica a las keywords ya detectadas hoy el
- * juicio manual dado en el chat (typo de marca, candidata de
- * schema, ya cubierta en otro cluster, etc.) — no es lógica genérica
- * reutilizable, por eso va hardcodeado por texto exacto de keyword.
- * Correr DESPUÉS de recrear la pestaña Seguimiento desde cero (eliminarla
- * y volver a correr exportarKeywordsGSC). Borrar tras usarla.
+ * Cuenta filas por Estado en cada pestaña de `nombresHojas` → { hoja:
+ * { estado: n } }. Columna "Estado" localizada por encabezado. Una pestaña
+ * que no existe o no tiene columna Estado queda fuera sin error.
  */
-function aplicarNotasIniciales_() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.NOMBRE_HOJA_SEGUIMIENTO);
-  const datos = sheet.getDataRange().getValues();
-  const headers = datos[0];
-  const colKeyword = headers.indexOf('Keyword');
-  const colEstado = headers.indexOf('Estado');
-  const colNotas = headers.indexOf('Notas');
-
-  const overrides = {
-    'it consulting': {
-      estado: 'Por optimizar',
-      nota: 'Posición floja (9.9) para 590 impr. y 0% CTR — revisar si el title/meta de la página que rankea usa esta keyword de forma clara.'
-    },
-    'it consulting berlin': {
-      estado: 'Por optimizar',
-      nota: 'Señal más fuerte del reporte: posición 2.2, 586 impr., 0% CTR. Revisar urgente title tag y meta description de esa página.'
-    },
-    'it-consulting berlin': {
-      estado: 'Por optimizar',
-      nota: 'Posición 1.5, 0% CTR — probablemente la misma página que "it consulting berlin" (variante con guión). Resolver junto con esa.'
-    },
-    'it consultant berlin': {
-      estado: 'Por optimizar',
-      nota: 'Mismo patrón que las anteriores (pos. 3.7, 0% CTR) — revisar junto con "it consulting berlin".'
-    },
-    'refokus': {
-      estado: 'Descartada',
-      nota: 'Typo de marca (gente escribiendo mal "Yfokus"), no es keyword de contenido.'
-    },
-    'it agency potsdam': {
-      nota: 'Evaluar agregar Potsdam a areaServed [A.7] si se confirma que se atiende esa zona.'
-    },
-    'erp consulting': {
-      nota: 'Ya cubierta en Cluster A/B de anexo-keywords-y-entidades.md, no es candidata nueva.'
-    }
-  };
-
-  datos.forEach((fila, i) => {
-    if (i === 0) return;
-    const o = overrides[fila[colKeyword]];
-    if (!o) return;
-    const numFila = i + 1;
-    if (o.estado) sheet.getRange(numFila, colEstado + 1).setValue(o.estado);
-    if (o.nota) sheet.getRange(numFila, colNotas + 1).setValue(o.nota);
+function contarPorEstado_(nombresHojas) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const conteos = {};
+  nombresHojas.forEach(nombre => {
+    const sheet = ss.getSheetByName(nombre);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const colEstado = columnasPorEncabezado_(sheet)('Estado');
+    if (!colEstado) return;
+    conteos[nombre] = {};
+    sheet.getRange(2, colEstado, sheet.getLastRow() - 1, 1).getValues().forEach(f => {
+      const estado = f[0] || '(vacío)';
+      conteos[nombre][estado] = (conteos[nombre][estado] || 0) + 1;
+    });
   });
+  return conteos;
+}
+
+/** Suma los conteos por pestaña de contarPorEstado_ en un solo total por Estado. */
+function sumarConteos_(conteosPorHoja) {
+  const totales = {};
+  Object.keys(conteosPorHoja).forEach(hoja => {
+    Object.keys(conteosPorHoja[hoja]).forEach(estado => {
+      totales[estado] = (totales[estado] || 0) + conteosPorHoja[hoja][estado];
+    });
+  });
+  return totales;
 }

@@ -53,9 +53,9 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   Search Console a consultar. Debe coincidir EXACTO con cómo está
   verificada en Search Console (dominio `sc-domain:...` vs. prefijo URL,
   con/sin barra final) — si no coincide, la API devuelve error o 0 filas.
-- `EMAIL_RESUMEN` (usado por `emailResumenBanco_()` en
-  `Script5_BancoContenido.js`) — correo destino del resumen de cada
-  corrida.
+- `EMAIL_RESUMEN` (usado por `emailResumen_()` en `Code.js`) — correo
+  destino de los resúmenes de `publicarPriorizadasEnBancoDeContenido()` y
+  `evaluarEstados()`.
 - `DEFAULT_ESPACIO`, `DEFAULT_CANALES` (usados por
   `valoresPorDefectoBanco_()` en `Script5_BancoContenido.js`) — valores
   por defecto al crear una fila nueva en el banco de contenido; deben
@@ -72,6 +72,43 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   "Preguntas" vieja ya borrada; `openById()` evita depender de ese
   puntero. Valor real (instalación actual):
   `12n8DVcR7MlnfyND81xMv5RmML4QkOicPGyj12Bi888Q`.
+
+## Evaluación automática de Estados (03/10/2026)
+`Script7_EvaluarEstados.js` → `evaluarEstados()` recalcula la columna
+Estado de "Preguntas" a partir de los datos de Pasos 2-4, y manda por
+correo cuántas filas hay en cada Estado que requiere acción (todos menos
+`CONFIG_EVALUACION.ESTADOS_SIN_ACCION`, hoy solo "Descartada"). Las reglas
+se aplican en orden y gana la última que se cumple:
+Posición autocompletado ≥ 1 → Por investigar volumen; Volumen mensual
+con cualquier valor (**0 cuenta**: significa que ya pasó por Keyword
+Surfer) → Por evaluar competencia; Top 10 dominios con valor → Por
+optimizar; Acción sugerida "competir de frente" → Priorizada / "buscar
+long-tail" → Pendiente; Priorizada con volumen > 50 → Por optimizar —
+urgente. Si no se cumple ninguna regla, la fila conserva su Estado.
+- **Recalcula también las "Descartada"** (decisión del 03/10/2026). Un
+  descarte manual se pierde si la fila tiene datos que cumplen alguna
+  regla (ej. Volumen = 0). `ESTADOS_SIN_ACCION` solo afecta al correo, no
+  protege filas.
+- `simularEvaluacionEstados()` hace lo mismo sin escribir nada (solo log
+  y correo con lo que cambiaría). Correrla antes de la primera corrida
+  real o después de cambiar una regla.
+- Las reglas viven en `CONFIG_EVALUACION.REGLAS` (columna por encabezado
+  y condición). Antes de escribir, verifica que cada Estado de las reglas
+  exista en el catálogo de Data; si alguno falta, corta con error.
+- "Por optimizar — urgente" también pasa al banco de contenido
+  (`CONFIG_BANCO.ESTADOS_PARA_BANCO`), igual que "Priorizada".
+- Sin trigger por código: crearlo a mano apuntando a `evaluarEstados`.
+
+## Columnas por encabezado, nunca por posición (03/10/2026)
+Todas las pestañas se leen y escriben ubicando cada columna por su
+encabezado (`columnasPorEncabezado_` / `columnasObligatorias_` en
+`Code.js`), porque se reordenan a mano. Las listas de Data también se
+ubican por su encabezado (`leerBloqueData_`), no por fila fija. Bugs que
+motivaron el cambio: en Seguimiento, "Volumen mensual" pasó delante de
+"Acción propuesta", y `actualizarSeguimiento_` (que escribía por
+posición) iba a poner la fórmula de keywords nuevas en la columna de
+Volumen. Además, el dropdown de Acción sugerida leía `Data!A13:A14` y la
+lista ya estaba en A15:A16, así que no se aplicaba.
 
 ## Configuración manual necesaria (no automatizable por Claude Code)
 - El proyecto debe estar autorizado con una cuenta de Google que tenga
