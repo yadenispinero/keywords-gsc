@@ -6,53 +6,50 @@ Este documento recoge dos visualizaciones del proyecto `keywords-gsc`: la relaci
 
 ```mermaid
 flowchart LR
-    classDef external fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,color:#1B1B1B;
-    classDef sheets fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,color:#1B1B1B;
-    classDef appscript fill:#F3E5F5,stroke:#7B1FA2,stroke-width:1.5px,color:#1B1B1B;
-    classDef helper fill:#FFF3E0,stroke:#EF6C00,stroke-width:1.5px,color:#1B1B1B;
-    classDef api fill:#FCE4EC,stroke:#C2185B,stroke-width:1.5px,color:#1B1B1B;
+    classDef external fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B1B1B
+    classDef sheets fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
+    classDef appscript fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#1B1B1B
+    classDef helper fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#1B1B1B
+    classDef api fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#1B1B1B
 
-    subgraph GS[Google Sheets]
-        A[Data\nConfiguración y reglas]
-        B[Seguimiento\nKeywords en trabajo]
-        C[GSC yyyy-MM-dd\nHistórico diario]
+    subgraph GS["Google Sheets"]
+        A["Data<br/>Configuración y reglas"]
+        B["Seguimiento<br/>Keywords en trabajo"]
+        C["GSC yyyy-MM-dd<br/>Histórico diario"]
     end
 
-    subgraph AS[Google Apps Script Runtime]
-        D[Code.js\nOrquestador principal]
-        E[Script7_EvaluarEstados.js\nEvaluación de estado]
-        F[Script2_Preguntas.js\nPreguntas e idiomas]
-        G[Script5_BancoContenido.js\nBanco de contenido]
-        H[Script6_ValidarPreguntas.js\nValidación]
-        I[Script8_VerificarWeb.js\nVerificación web]
+    subgraph AS["Google Apps Script Runtime"]
+        D["Code.js<br/>Orquestador principal"]
+        E["Script7<br/>Evaluación de estado"]
+        F["Script2<br/>Preguntas e idiomas"]
+        G["Script5<br/>Banco de contenido"]
+        H["Script6<br/>Validación"]
+        I["Script8<br/>Verificación web"]
     end
 
-    subgraph EXT[Servicios externos]
-        J[Search Console API\nREST + OAuth]
-        K[MailApp\nEmail de resumen]
+    subgraph EXT["Servicios externos"]
+        J["Search Console API<br/>REST + OAuth"]
+        K["MailApp<br/>Email de resumen"]
     end
 
     A --> E
     B --> E
     C --> D
-
     D --> J
     D --> K
     D -->|lee/escribe| GS
-
     D --- F
     D --- G
     D --- H
     D --- I
-
     F --> B
     G --> A
     H --> A
     I --> B
 
-    class A,B,C sheets;
-    class D,E,F,G,H,I appscript;
-    class J,K api;
+    class A,B,C sheets
+    class D,E,F,G,H,I appscript
+    class J,K api
 ```
 
 ### Descripción
@@ -71,40 +68,55 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    classDef trigger fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,color:#1B1B1B;
-    classDef core fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,color:#1B1B1B;
-    classDef manual fill:#FFF3E0,stroke:#EF6C00,stroke-width:1.5px,color:#1B1B1B;
-    classDef eval fill:#F3E5F5,stroke:#7B1FA2,stroke-width:1.5px,color:#1B1B1B;
-    classDef email fill:#FCE4EC,stroke:#C2185B,stroke-width:1.5px,color:#1B1B1B;
+    classDef trigger fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B1B1B
+    classDef core fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#1B1B1B
+    classDef manual fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#1B1B1B
+    classDef eval fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#1B1B1B
+    classDef email fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#1B1B1B
 
-    A[Trigger mensual\n1er día / 6:00–7:00]:::trigger --> B[exportarKeywordsGSC()\nCode.js]:::core
+    A["Trigger mensual<br/>1er día / 6:00–7:00"]:::trigger
+    B["exportarKeywordsGSC<br/>Code.js"]:::core
+    C["consultarSearchConsole"]:::core
+    D["Traer consultas<br/>últimos 90 días"]:::core
+    E["Clasificar por oportunidad"]:::core
+    F["Ordenar por impresiones"]:::core
+    G["Seleccionar Top N<br/>keywords"]:::core
+    H["Escribir hoja<br/>GSC yyyy-MM-dd"]:::core
+    I["Actualizar<br/>Seguimiento"]:::core
+    J{Keyword<br/>ya existía?}:::manual
+    K["Crear nueva fila<br/>Estado: Pendiente"]:::manual
+    L["Actualizar métricas GSC"]:::manual
+    M["Revisión manual<br/>volumen y competencia"]:::manual
+    N["evaluarEstados<br/>Script7"]:::eval
+    O["Aplicar reglas<br/>de Data"]:::eval
+    P["Actualizar Estado<br/>de filas"]:::eval
+    Q["Verificar web<br/>Script8"]:::eval
+    R["Detectar keyword<br/>en página/meta/cuerpo"]:::eval
+    S["Actualizar estado final<br/>y fechas"]:::eval
+    T["Enviar resumen<br/>por email"]:::email
+    U["Fin del ciclo"]:::trigger
 
-    B --> C[consultarSearchConsole_()]:::core
-    C --> D[Traer consultas\núltimos 90 días]:::core
-    D --> E[Clasificar por oportunidad]:::core
-    E --> F[Ordenar por impresiones]:::core
-    F --> G[Seleccionar Top N keywords]:::core
-
-    G --> H[Escribir hoja\nGSC yyyy-MM-dd]:::core
-    G --> I[Actualizar Seguimiento]:::core
-
-    I --> J{¿La keyword\nya existía?}:::manual
-    J -->|No| K[Crear nueva fila\nEstado: Pendiente]:::manual
-    J -->|Sí| L[Actualizar métricas GSC\nCategoría, impresiones, CTR, posición]:::manual
-
-    K --> M[Revisión manual\nvolumen, competencia, notas y estado]:::manual
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    G --> I
+    I --> J
+    J -->|No| K
+    J -->|Sí| L
+    K --> M
     L --> M
-
-    M --> N[evaluarEstados()\nScript7]:::eval
-    N --> O[Aplicar reglas\nde Data]:::eval
-    O --> P[Actualizar Estado\nde filas]:::eval
-
-    P --> Q[Verificar web\nScript8]:::eval
-    Q --> R[Detectar si la keyword\nestá en página, meta y cuerpo]:::eval
-    R --> S[Actualizar estado final\ny fechas]:::eval
-
-    S --> T[Enviar resumen por email\nenviarCorreo_]:::email
-    T --> U[Fin del ciclo mensual]:::trigger
+    M --> N
+    N --> O
+    O --> P
+    P --> Q
+    Q --> R
+    R --> S
+    S --> T
+    T --> U
 ```
 
 ### Descripción del flujo
@@ -136,5 +148,3 @@ Tipo: Google Apps Script + Google Sheets
 Integración externa: Search Console API + Google Mail + Web verification
 Modo de operación: flujo mensual automatizado con revisión manual de keywords
 ```
-
-Si quieres, puedo dejarte también una versión de este documento con estilo más formal para README o una versión con diagramas más compactos para presentación.
