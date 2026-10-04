@@ -5,33 +5,54 @@ Este documento recoge dos visualizaciones del proyecto `keywords-gsc`: la relaci
 ## 1) Diagrama de relaciones entre componentes
 
 ```mermaid
-graph LR
-    A[Google Sheets\nHoja de trabajo principal] --> B[Data\nTablas de configuración]
-    A --> C[Seguimiento\nKeywords en trabajo]
-    A --> D[GSC yyyy-MM-dd\nHistórico diario]
+flowchart LR
+    classDef external fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,color:#1B1B1B;
+    classDef sheets fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,color:#1B1B1B;
+    classDef appscript fill:#F3E5F5,stroke:#7B1FA2,stroke-width:1.5px,color:#1B1B1B;
+    classDef helper fill:#FFF3E0,stroke:#EF6C00,stroke-width:1.5px,color:#1B1B1B;
+    classDef api fill:#FCE4EC,stroke:#C2185B,stroke-width:1.5px,color:#1B1B1B;
 
-    E[Google Apps Script\nRuntime / clasp] --> F[Code.js\nOrquestador principal]
-    E --> G[Script7_EvaluarEstados.js\nReglas y estado]
-    E --> H[Script2_Preguntas.js\nPreguntas / idiomas]
-    E --> I[Script5_BancoContenido.js\nBanco de contenido]
-    E --> J[Script6_ValidarPreguntas.js\nValidación]
-    E --> K[Script8_VerificarWeb.js\nVerificación web]
+    subgraph GS[Google Sheets]
+        A[Data\nConfiguración y reglas]
+        B[Seguimiento\nKeywords en trabajo]
+        C[GSC yyyy-MM-dd\nHistórico diario]
+    end
 
-    F --> L[Search Console API\nREST / OAuth]
-    F --> M[MailApp\nCorreos de resumen]
-    F --> N[SpreadsheetApp\nLectura/escritura en Sheets]
+    subgraph AS[Google Apps Script Runtime]
+        D[Code.js\nOrquestador principal]
+        E[Script7_EvaluarEstados.js\nEvaluación de estado]
+        F[Script2_Preguntas.js\nPreguntas e idiomas]
+        G[Script5_BancoContenido.js\nBanco de contenido]
+        H[Script6_ValidarPreguntas.js\nValidación]
+        I[Script8_VerificarWeb.js\nVerificación web]
+    end
 
-    B --> G
-    C --> G
-    D --> F
+    subgraph EXT[Servicios externos]
+        J[Search Console API\nREST + OAuth]
+        K[MailApp\nEmail de resumen]
+    end
+
+    A --> E
+    B --> E
+    C --> D
+
+    D --> J
+    D --> K
+    D -->|lee/escribe| GS
+
+    D --- F
+    D --- G
+    D --- H
+    D --- I
+
+    F --> B
+    G --> A
     H --> A
-    I --> A
-    J --> A
-    K --> A
+    I --> B
 
-    L -->|consulta queries| F
-    N -->|lee/escribe| A
-    M -->|envía resúmenes| A
+    class A,B,C sheets;
+    class D,E,F,G,H,I appscript;
+    class J,K api;
 ```
 
 ### Descripción
@@ -50,42 +71,40 @@ graph LR
 
 ```mermaid
 flowchart TD
-    A[Trigger mensual\n1er día / 6:00-7:00] --> B[exportarKeywordsGSC()]
+    classDef trigger fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,color:#1B1B1B;
+    classDef core fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,color:#1B1B1B;
+    classDef manual fill:#FFF3E0,stroke:#EF6C00,stroke-width:1.5px,color:#1B1B1B;
+    classDef eval fill:#F3E5F5,stroke:#7B1FA2,stroke-width:1.5px,color:#1B1B1B;
+    classDef email fill:#FCE4EC,stroke:#C2185B,stroke-width:1.5px,color:#1B1B1B;
 
-    B --> C[consultarSearchConsole_()]
-    C --> D[Traer queries de los últimos 90 días]
-    D --> E[Clasificar por oportunidad]
-    E --> F[Ordenar por impresiones]
-    F --> G[Tomar top N keywords]
+    A[Trigger mensual\n1er día / 6:00–7:00]:::trigger --> B[exportarKeywordsGSC()\nCode.js]:::core
 
-    G --> H[Escribir pestaña GSC yyyy-MM-dd]
-    G --> I[Actualizar Seguimiento]
+    B --> C[consultarSearchConsole_()]:::core
+    C --> D[Traer consultas\núltimos 90 días]:::core
+    D --> E[Clasificar por oportunidad]:::core
+    E --> F[Ordenar por impresiones]:::core
+    F --> G[Seleccionar Top N keywords]:::core
 
-    I --> J{¿La keyword ya existía?}
-    J -->|No| K[Crear fila nueva\nEstado: Pendiente]
-    J -->|Sí| L[Actualizar métricas GSC\nCategoría, impresiones, CTR, posición]
+    G --> H[Escribir hoja\nGSC yyyy-MM-dd]:::core
+    G --> I[Actualizar Seguimiento]:::core
 
-    K --> M[Revisión manual: volumen, competencia, notas, estado]
+    I --> J{¿La keyword\nya existía?}:::manual
+    J -->|No| K[Crear nueva fila\nEstado: Pendiente]:::manual
+    J -->|Sí| L[Actualizar métricas GSC\nCategoría, impresiones, CTR, posición]:::manual
+
+    K --> M[Revisión manual\nvolumen, competencia, notas y estado]:::manual
     L --> M
 
-    M --> N[evaluarEstados()\nScript7]
-    N --> O[Aplicar reglas de Data]
-    O --> P[Actualizar Estado de filas]
+    M --> N[evaluarEstados()\nScript7]:::eval
+    N --> O[Aplicar reglas\nde Data]:::eval
+    O --> P[Actualizar Estado\nde filas]:::eval
 
-    P --> Q[Verificar web\nScript8]
-    Q --> R[Detectar if keyword está en página, meta y cuerpo]
-    R --> S[Actualizar estado final y fechas]
+    P --> Q[Verificar web\nScript8]:::eval
+    Q --> R[Detectar si la keyword\nestá en página, meta y cuerpo]:::eval
+    R --> S[Actualizar estado final\ny fechas]:::eval
 
-    S --> T[Enviar resumen por email]
-    T --> U[Fin del ciclo mensual]
-
-    style A fill:#e8f5e9,stroke:#2e7d32
-    style B fill:#e3f2fd,stroke:#1565c0
-    style H fill:#fff3e0,stroke:#ef6c00
-    style I fill:#fff3e0,stroke:#ef6c00
-    style N fill:#f3e5f5,stroke:#7b1fa2
-    style Q fill:#f3e5f5,stroke:#7b1fa2
-    style T fill:#fce4ec,stroke:#c2185b
+    S --> T[Enviar resumen por email\nenviarCorreo_]:::email
+    T --> U[Fin del ciclo mensual]:::trigger
 ```
 
 ### Descripción del flujo
