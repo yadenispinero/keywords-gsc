@@ -32,9 +32,6 @@
  * duplicate that logic.
  */
 const CONFIG_BANCO = {
-  // This does not identify a company; it is only the default funnel
-  // category for new content. Update it if the Estrategia catalog in
-  // Nomencladores changes.
   DEFAULT_ESTRATEGIA: '02. Contenidos TOFU'
 };
 
