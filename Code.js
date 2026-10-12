@@ -344,22 +344,9 @@ const COLUMNAS_SEGUIMIENTO = [
 ];
 
 /**
- * Seguimiento absorbed the former "Competencia" tab (12/09/2026), which
- * was redundant. "Acción propuesta" and "Notas" are formulas that recalc
- * automatically; this script never changes them on existing rows. Notes
- * starts with the Description for the proposed action (VLOOKUP against
- * Data!A:B). If manually overwritten, that cell remains a manual note.
- * Monthly volume, top 10 domains, competition review date, and suggested
- * action are completed manually (Steps 3/4). evaluarEstados() in
- * Script7_EvaluarEstados.js or a person updates Status. For an existing
- * keyword, only GSC data columns (Category, Impressions, CTR, Position,
- * Last update) are refreshed; manual Step 3/4 work is preserved.
- *
- * FIX 03/10/2026: values used to be written by fixed position (14 columns
- * in order). The live tab had already moved "Volumen mensual" before
- * "Acción propuesta", so new keywords would have received the formula in
- * the volume column and Notes would have referenced the wrong column.
- * Values are now written to the column matching each header.
+ * Updates GSC metrics for existing keywords while preserving manual fields.
+ * New rows receive formulas for "Acción propuesta" and "Notas". Columns
+ * are located by header.
  */
 function actualizarSeguimiento_(priorizadas, fechaStr) {
   const sheet = obtenerOCrearHojaSeguimiento_();
