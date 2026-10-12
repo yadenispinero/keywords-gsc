@@ -278,11 +278,8 @@ function exportarKeywordsGSC() {
 }
 
 /**
- * Calls the Search Console API directly over REST (UrlFetchApp plus the
- * script's OAuth token) instead of relying on the Apps Script editor's
- * advanced "Search Console API"/"Webmasters API" service, which Google no
- * longer lists consistently. Only the `webmasters.readonly` scope in
- * appsscript.json is required.
+ * Queries the Search Console API with UrlFetchApp and the script's OAuth
+ * token. Requires the `webmasters.readonly` scope in appsscript.json.
  */
 function consultarSearchConsole_(request) {
   const url = 'https://www.googleapis.com/webmasters/v3/sites/'
