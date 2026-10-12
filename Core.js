@@ -34,7 +34,7 @@ function configDato_(clave) {
 /**
  * Opens this spreadsheet by ID (Script Property `SPREADSHEET_ID`) instead
  * of using getActiveSpreadsheet(). See FIX 13/09/2026-B in
- * Script6_ValidarPreguntas.js (a stored pointer referenced a deleted tab).
+ * ValidateQuestions.js (a stored pointer referenced a deleted tab).
  */
 function hojaDeCalculo_() {
   return SpreadsheetApp.openById(configDato_('SPREADSHEET_ID'));

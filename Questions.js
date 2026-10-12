@@ -211,7 +211,7 @@ function leerSemillas_() {
  * query has no results), or `null` if the request itself failed (timeout,
  * temporary block, or non-200 response). The caller decides whether this
  * distinction matters. It does matter in validarPreguntasExistentes in
- * Script6_ValidarPreguntas.js: a `null` must be retried on the next run,
+ * ValidateQuestions.js: a `null` must be retried on the next run,
  * never recorded as "no actual demand".
  */
 function consultarAutocomplete_(consulta, hl, gl) {
@@ -228,7 +228,7 @@ function consultarAutocomplete_(consulta, hl, gl) {
  * against existing rows happens earlier in investigarPreguntasAutocomplete
  * so the per-seed/language limit counts only genuinely new results. This
  * never changes Status or Notes on existing rows, matching the behavior
- * of actualizarSeguimiento_ in Code.js.
+ * of actualizarSeguimiento_ in Core.js.
  *
  * "Autocomplete position": the index (1, 2, 3, ...) at which Google
  * returned the suggestion for that query. This endpoint provides no actual

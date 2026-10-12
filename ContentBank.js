@@ -4,7 +4,7 @@
  * "Preguntas" (Step 2; new topics that do not yet have a page) are added
  * as minimal rows to the content bank tab when their Status is marked
  * "Yes" in the "Pasa al banco de contenido" column of the "Configuración
- * de Estados" table on Data (see Script7_EvaluarEstados.js). The content
+ * de Estados" table on Data (see EvaluateStatuses.js). The content
  * bank is a separate spreadsheet, opened by ID.
  *
  * Keywords in "Seguimiento" (Step 1) are not sent here: they already have
@@ -18,7 +18,7 @@
   * - `DEFAULT_ESPACIO`, `DEFAULT_CANALES` (optional): defaults for the new
   *   row. They must exactly match the catalogs on the content bank's
   *   nomencladores tab.
- * - `EMAIL_RESUMEN` (vía emailResumen_() en Code.js).
+ * - `EMAIL_RESUMEN` (vía emailResumen_() en Core.js).
  * The default `Estrategia` remains in `CONFIG_BANCO`: it does not identify
  * a company; it is simply a content-funnel category.
  *

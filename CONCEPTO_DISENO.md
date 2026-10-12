@@ -16,12 +16,12 @@ aquí para que quede claro que fue una decisión informada y no un olvido.
 
 ```
 Paso 1: Keywords con tráfico real (GSC)  ──┐
-Paso 2: Preguntas nuevas (autocomplete)  ──┼─→ Estado por fila → Script5 → banco    
+Paso 2: Preguntas nuevas (autocomplete)  ──┼─→ Estado por fila → ContentBank → banco
 Paso 3: Volumen de búsqueda              ──┤   (banco de contenido)
 Paso 4: Competencia                      ──┘
 ```
 
-### 1. Keywords con tráfico real — `Code.js`, automático
+### 1. Keywords con tráfico real — `Core.js`, automático
 
 `exportarKeywordsGSC()` consulta la Search Console API (REST directa vía
 `UrlFetchApp` + `ScriptApp.getOAuthToken()`, propiedad de dominio
@@ -35,7 +35,7 @@ Estas keywords **no** van al banco de contenido — ya tienen página
 rankeando, su ruta es optimización de lo existente (tarea [A.3]), no
 generación de contenido nuevo.
 
-### 2. Preguntas nuevas — `Script2_Preguntas.js`, automático
+### 2. Preguntas nuevas — `Questions.js`, automático
 
 `investigarPreguntasAutocomplete()` usa el endpoint público (no oficial,
 sin auth) de autocompletado de Google (`suggestqueries.google.com`) para
@@ -87,7 +87,7 @@ separado — los datos ahora viven como columnas dentro de "Seguimiento" y
 
 ## Puente hacia generación de contenido
 
-`Script5_BancoContenido.js` → `publicarPriorizadasEnBancoDeContenido()`:
+`ContentBank.js` → `publicarPriorizadasEnBancoDeContenido()`:
 toma las preguntas cuyo Estado "Pasa al banco de contenido" (tabla
 Configuración de Estados en Data; por defecto "Priorizada" y "Por
 optimizar — urgente") que no estén ya en el banco, y agrega una fila
@@ -115,7 +115,7 @@ con lo agregado y el total de filas por Estado combinando "Seguimiento" +
 - Sin costo de API de pago (Keyword Planner de pago, AlsoAsked, etc.) —
   se prioriza siempre la alternativa gratuita (autocomplete público,
   extensiones de navegador) aunque implique un paso manual.
-- `Script5` ubica columnas por encabezado, nunca por posición fija — la
+- `ContentBank` ubica columnas por encabezado, nunca por posición fija — la
   estructura de la pestaña del banco cambia seguido.
 
 ## Pendientes / abierto

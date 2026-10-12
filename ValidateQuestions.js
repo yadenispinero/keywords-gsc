@@ -1,13 +1,13 @@
 /**
  * === VALIDATE EXISTING QUESTIONS AGAINST GOOGLE AUTOCOMPLETE ===
- * Unlike investigarPreguntasAutocomplete() in Script2_Preguntas.js (Step
+ * Unlike investigarPreguntasAutocomplete() in Questions.js (Step
  * 2: seed + prefix generates new questions), this function does not
  * generate questions. It takes complete questions already entered in the
  * "Preguntas" tab (for example, pasted manually without Step 2) and checks
  * whether they show demand. It queries Google's Autocomplete endpoint
  * with the complete question and records the suggestion's position (1, 2,
  * 3, ...) if Google returns the same or a similar question. It reuses
- * CONFIG_PREGUNTAS and consultarAutocomplete_() from Script2_Preguntas.js
+ * CONFIG_PREGUNTAS and consultarAutocomplete_() from Questions.js
  * in the same project and global scope.
  *
  * Rows processed: any row in "Preguntas" where "Pregunta" is not blank
@@ -17,10 +17,10 @@
  *
  * Writes only "Posición autocompletado" and "Fecha detectada" (if blank).
  * It never changes Status or Notes on existing rows, matching
- * escribirPreguntasNuevas_ in Script2_Preguntas.js.
+ * escribirPreguntasNuevas_ in Questions.js.
  *
  * Columns are located by their headers (row 1), not by fixed positions.
- * This follows the pattern used in Script5_BancoContenido.js and remains
+ * This follows the pattern used in ContentBank.js and remains
  * safe if columns are reordered.
  *
  * FIX 13/09/2026: consultarAutocomplete_() returns `null` when the request
@@ -35,7 +35,7 @@
  * "Sheet <id> not found" because Google retained a pointer to a deleted
  * "Preguntas" tab. SpreadsheetApp.openById() opens the spreadsheet by its
  * actual ID and avoids that pointer. The ID is stored in Script Properties
- * as SPREADSHEET_ID (through hojaDeCalculo_() in Code.js), not hard-coded,
+ * as SPREADSHEET_ID (through hojaDeCalculo_() in Core.js), not hard-coded,
  * consistent with the rest of the project.
  *
  * To schedule it: Triggers (clock icon in the left sidebar) → Add trigger

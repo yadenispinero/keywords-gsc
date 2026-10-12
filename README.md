@@ -48,11 +48,11 @@ clasp clone <SCRIPT_ID_DEL_PASO_1>
 ```
 
 Esto descarga el `.gs`/`.json` reales del proyecto contenedor —
-sobrescribe `Code.js`/`appsscript.json` de este scaffold con los suyos.
+sobrescribe `Core.js`/`appsscript.json` de este scaffold con los suyos.
 Como este scaffold ya trae el código y `appsscript.json` con el servicio
 avanzado declarado, en la práctica conviene al revés: clonar primero
 para obtener el `.clasp.json` real (con el scriptId), y luego copiar
-encima `Code.js` y `appsscript.json` de este repo antes de hacer
+encima `Core.js` y `appsscript.json` de este repo antes de hacer
 `clasp push`.
 
 ## 6. Nada que habilitar como "servicio avanzado"
@@ -73,7 +73,7 @@ Sin esto, `exportarKeywordsGSC()` falla con un error explícito.
 Los umbrales (`UMBRAL_CTR_BAJO`, `UMBRAL_IMPRESIONES_ALTAS`,
 `UMBRAL_IMPRESIONES_BAJAS`), la ventana de días (`DIAS_ATRAS`) y el top a
 exportar (`TOP_N`) son genéricos y se ajustan directo en el objeto
-`CONFIG` de `Code.js`.
+`CONFIG` de `Core.js`.
 
 ## 8. Primera corrida y autorización
 
@@ -94,7 +94,7 @@ mensual", día 1, 6:00–7:00 (o la periodicidad que se decida).
 
 ```bash
 git init
-git add CLAUDE.md README.md .gitignore Code.js appsscript.json .clasp.json.example
+git add CLAUDE.md README.md .gitignore Core.js appsscript.json .clasp.json.example
 git commit -m "Setup inicial: script de investigación de keywords vía Search Console API"
 ```
 
@@ -126,7 +126,7 @@ Este script está pensado para no ser exclusivo de una sola empresa:
 
 - Crear una Hoja de cálculo y proyecto de Apps Script nuevos (pasos 1–6)
   para la otra empresa.
-- Copiar `Code.js` y `appsscript.json` de este repo tal cual, sin editar
+- Copiar `Core.js` y `appsscript.json` de este repo tal cual, sin editar
   nada.
 - Configurar la Script Property `SITE_URL` del nuevo proyecto (paso 7) y
   ajustar umbrales en `CONFIG` si aplica.

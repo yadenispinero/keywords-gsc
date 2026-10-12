@@ -6,7 +6,7 @@
  * action.
  *
  * These settings are not hard-coded; they live in three tables on the
- * "Data" tab (see leerTablaData_ in Code.js). The tables are created with
+ * "Data" tab (see leerTablaData_ in Core.js). The tables are created with
  * the defaults below the first time the script runs:
  *
  * - "Reglas de Estado": evaluated by Order; the LAST matching rule wins,
@@ -19,7 +19,7 @@
  * - "Configuración de Estados": for each Status, whether it requires
  *   action (included in the summary email), whether it passes to the
  *   content bank (used by publicarPriorizadasEnBancoDeContenido in
- *   Script5), how many sample rows to include in the email (0 or blank
+ *   ContentBank), how many sample rows to include in the email (0 or blank
  *   means none), and whether it is "Protegido". Rules and web verification
  *   do not change rows in a protected Status (default: Descartada).
  * - "Correo resumen": email text (to support other languages) and whether
@@ -70,7 +70,7 @@ const TABLA_REGLAS_ESTADO = {
     // generated.
     [7, 'Contenido generado', 'tiene valor', '', '', 'Contenido generado'],
     [8, 'Aplicado en publicación', 'tiene valor', '', '', 'Aplicado en publicación'],
-    // Populated by live website verification (Script8).
+    // Populated by live website verification (VerifyWebsite).
     [9, 'Aplicado en web', 'tiene valor', '', '', 'Aplicado en publicación'],
     // Published page components (03/10/2026): content = body, metadata =
     // meta description. "Aplicado en web" lists fields from the best page
@@ -200,7 +200,7 @@ function evaluarEstados_(simular) {
     filasPorHoja[nombre] = resultado.filas;
   });
 
-  // Write keywords found per page to the site page inventory tab (Script8).
+  // Write keywords found per page to the site page inventory tab (VerifyWebsite).
   if (!simular) escribirKeywordsEnPaginas_();
 
   // For evaluated tabs, use in-memory Status values (the sheet has not
@@ -257,7 +257,7 @@ function evaluarHoja_(sheet, reglas, simular) {
 
   const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
 
-  // Live website verification (Script8) fills "Aplicado en web" in memory
+  // Live website verification (VerifyWebsite) fills "Aplicado en web" in memory
   // before applying the rules. If the column does not exist, use the next
   // available column; it is created when values are written.
   const protegidos = estadosProtegidos_();
@@ -382,7 +382,7 @@ function verificarEstadosConfigurados_(reglas) {
  * comes from configuration: text from "Correo resumen", Status values and
  * sample rows from "Configuración de Estados", action guidance from the
  * Status catalog descriptions, and the subject prefix from the
- * NOMBRE_INSTALACION Script Property (see enviarCorreo_ in Code.js).
+ * NOMBRE_INSTALACION Script Property (see enviarCorreo_ in Core.js).
  * Includes a Status-by-tab table with totals and changes since the last
  * real run, links to the spreadsheet/tabs/rows, this run's Status changes,
  * and the first N rows for configured Status values.

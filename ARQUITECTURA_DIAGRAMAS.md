@@ -19,12 +19,12 @@ flowchart LR
     end
 
     subgraph AS["Google Apps Script Runtime"]
-        D["Code.js<br/>Orquestador principal"]
-        E["Script7<br/>Evaluación de estado"]
-        F["Script2<br/>Preguntas e idiomas"]
-        G["Script5<br/>Banco de contenido"]
-        H["Script6<br/>Validación"]
-        I["Script8<br/>Verificación web"]
+        D["Core.js<br/>Orquestador principal"]
+        E["EvaluateStatuses.js<br/>Evaluación de estado"]
+        F["Questions.js<br/>Preguntas e idiomas"]
+        G["ContentBank.js<br/>Banco de contenido"]
+        H["ValidateQuestions.js<br/>Validación"]
+        I["VerifyWebsite.js<br/>Verificación web"]
     end
 
     subgraph EXT["Servicios externos"]
@@ -54,12 +54,12 @@ flowchart LR
 
 ### Descripción
 
-- `Code.js` es el punto central del proyecto y orquesta la ejecución principal.
+- `Core.js` es el punto central del proyecto y orquesta la ejecución principal.
 - La Hoja de cálculo Google Sheets actúa como base de datos operativa del sistema.
 - La pestaña `Data` guarda las reglas, estados, configuración y catálogos que el script usa sin hardcodear datos de cada instalación.
 - La pestaña `Seguimiento` es la vista operativa donde se guarda el estado de cada keyword y el trabajo manual.
 - La pestaña `GSC yyyy-MM-dd` es un histórico por corrida, que conserva cada extracción del día.
-- Los scripts complementarios (`Script2`, `Script5`, `Script6`, `Script7`, `Script8`) agregan comportamiento específico para preguntas, validación, banco de contenido, estados y verificación web.
+- Los módulos complementarios (`Questions.js`, `ContentBank.js`, `ValidateQuestions.js`, `EvaluateStatuses.js`, `VerifyWebsite.js`) agregan comportamiento específico para preguntas, validación, banco de contenido, estados y verificación web.
 - El sistema consulta Google Search Console por REST con OAuth, y luego escribe los resultados en Sheets y envía resúmenes por email.
 
 ---
@@ -75,7 +75,7 @@ flowchart TD
     classDef email fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#1B1B1B
 
     A["Trigger mensual<br/>1er día / 6:00–7:00"]:::trigger
-    B["exportarKeywordsGSC<br/>Code.js"]:::core
+    B["exportarKeywordsGSC<br/>Core.js"]:::core
     C["consultarSearchConsole"]:::core
     D["Traer consultas<br/>últimos 90 días"]:::core
     E["Clasificar por oportunidad"]:::core
@@ -87,10 +87,10 @@ flowchart TD
     K["Crear nueva fila<br/>Estado: Pendiente"]:::manual
     L["Actualizar métricas GSC"]:::manual
     M["Revisión manual<br/>volumen y competencia"]:::manual
-    N["evaluarEstados<br/>Script7"]:::eval
+    N["evaluarEstados<br/>EvaluateStatuses.js"]:::eval
     O["Aplicar reglas<br/>de Data"]:::eval
     P["Actualizar Estado<br/>de filas"]:::eval
-    Q["Verificar web<br/>Script8"]:::eval
+    Q["Verificar web<br/>VerifyWebsite.js"]:::eval
     R["Detectar keyword<br/>en página/meta/cuerpo"]:::eval
     S["Actualizar estado final<br/>y fechas"]:::eval
     T["Enviar resumen<br/>por email"]:::email
@@ -127,7 +127,7 @@ flowchart TD
 4. Se genera una hoja histórica por fecha y se sincroniza la pestaña `Seguimiento`.
 5. El trabajo manual se hace para cada keyword: volumen, competencia y decisiones operativas.
 6. `evaluarEstados()` aplica las reglas de Data para recalcular el estado de cada fila.
-7. `Script8_VerificarWeb.js` comprueba si las keywords están realmente aplicadas en el sitio y en qué parte.
+7. `VerifyWebsite.js` comprueba si las keywords están realmente aplicadas en el sitio y en qué parte.
 8. Finalmente, se envía un correo con el resumen por estado, cambios y enlaces útiles.
 
 ---

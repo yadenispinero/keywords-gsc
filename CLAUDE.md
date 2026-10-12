@@ -7,7 +7,7 @@ oportunidad, y las deja en una hoja de trabajo con seguimiento manual.
 
 Proyecto genérico — pensado para reutilizarse con cualquier sitio/
 empresa. Los parámetros ajustables genéricos (umbrales, ventana de días)
-viven en el objeto `CONFIG` al inicio de `Code.js`; los datos que
+viven en el objeto `CONFIG` al inicio de `Core.js`; los datos que
 identifican la instalación concreta (dominio de Search Console, email de
 resumen, valores por defecto del banco de contenido) NO viven en el
 código — viven en **Script Properties** (ver sección abajo). Para usarlo
@@ -15,11 +15,24 @@ con otra empresa: se clona el script, se configuran sus Script
 Properties, y se apunta a otra Hoja de cálculo — no se toca ni una línea
 de código.
 
+## Script file names
+
+On 2026-10-12, the Apps Script source files were renamed to short English
+names. This was a naming-only change; behavior and function names did not
+change. Use the new names in all future references.
+
+| Previous file | Current file | Purpose |
+|---|---|---|
+| `Code.js` | `Core.js` | Search Console export and shared utilities |
+| `Script2_Preguntas.js` | `Questions.js` | Discover questions with Google Autocomplete |
+| `Script5_BancoContenido.js` | `ContentBank.js` | Publish eligible questions to the content bank |
+| `Script6_ValidarPreguntas.js` | `ValidateQuestions.js` | Validate existing questions with Autocomplete |
+| `Script7_EvaluarEstados.js` | `EvaluateStatuses.js` | Recalculate statuses and send summary |
+| `Script8_VerificarWeb.js` | `VerifyWebsite.js` | Check keyword use on published pages |
+
 ## Arquitectura
-- Proyecto de un solo archivo de lógica (`Code.js`) — no aplica todavía
-  la regla de Config.gs separado que sí usan los otros 2 proyectos del
-  repo `sistema-busqueda-empleo` (esto es un repo distinto, sin relación
-  con ese monorepo).
+- The project is split across the source files listed above. Shared
+  configuration and utilities are in `Core.js`.
 - `exportarKeywordsGSC()` es la única función que llama a la API. Escribe
   dos cosas en cada corrida:
   1. Una pestaña nueva `GSC yyyy-MM-dd` (histórico de cada corrida, no se
@@ -47,17 +60,17 @@ GCP.
 ## Script Properties (por instalación — nunca en el código)
 Configurar en ⚙️ Configuración del proyecto → Script Properties, en el
 editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
-`Script5_BancoContenido.js`):
+`ContentBank.js`):
 
-- `SITE_URL` (usado por `siteUrl_()` en `Code.js`) — la propiedad de
+- `SITE_URL` (usado por `siteUrl_()` en `Core.js`) — la propiedad de
   Search Console a consultar. Debe coincidir EXACTO con cómo está
   verificada en Search Console (dominio `sc-domain:...` vs. prefijo URL,
   con/sin barra final) — si no coincide, la API devuelve error o 0 filas.
-- `EMAIL_RESUMEN` (usado por `emailResumen_()` en `Code.js`) — correo
+- `EMAIL_RESUMEN` (usado por `emailResumen_()` en `Core.js`) — correo
   destino de los resúmenes de `publicarPriorizadasEnBancoDeContenido()` y
   `evaluarEstados()`.
 - `DEFAULT_ESPACIO`, `DEFAULT_CANALES` (usados por
-  `valoresPorDefectoBanco_()` en `Script5_BancoContenido.js`) — valores
+  `valoresPorDefectoBanco_()` en `ContentBank.js`) — valores
   por defecto al crear una fila nueva en el banco de contenido; deben
   coincidir literalmente con los catálogos de la pestaña de nomencladores
   del banco de contenido. Si falta alguna, esa columna queda vacía (no es
@@ -65,7 +78,7 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   de `Estrategia` NO es Script Property — no identifica ninguna empresa,
   vive en `CONFIG_BANCO.DEFAULT_ESTRATEGIA` dentro del código.
 - `SPREADSHEET_ID` (usado por `validarPreguntasExistentes()` en
-  `Script6_ValidarPreguntas.js`, vía `configDato_()` en `Code.js`) — el ID
+  `ValidateQuestions.js`, vía `configDato_()` en `Core.js`) — el ID
   de ESTA Hoja de cálculo (la que contiene "Preguntas", "Seguimiento",
   etc.). FIX 13/09/2026: `getActiveSpreadsheet()` tiró "Sheet <id> not
   found" porque Google guardaba un puntero interno a una pestaña
@@ -81,7 +94,7 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   del sitio. Si falta, se usa `BANCO_SPREADSHEET_ID`, porque hoy
   `Paginas_Sitio` vive en la misma Hoja que el banco.
 - `NOMBRE_INSTALACION` (opcional, 03/10/2026 — `enviarCorreo_()` en
-  `Code.js`) — si existe, el asunto de todos los correos va precedido de
+  `Core.js`) — si existe, el asunto de todos los correos va precedido de
   `[<nombre>] `. Sirve para distinguir los correos cuando varias entidades
   usan este mismo código.
 - `ULTIMO_CONTEO_ESTADOS` — **la escribe el script, no se carga a mano**.
@@ -91,28 +104,28 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
 
 ## Configuración funcional en la pestaña Data (03/10/2026)
 Lo que una instalación ajusta sin tocar código vive en **tablas de la
-pestaña Data**, ubicadas por su título (`leerTablaData_` en `Code.js`).
+pestaña Data**, ubicadas por su título (`leerTablaData_` en `Core.js`).
 Si una tabla no existe, el script la crea a la derecha de lo que haya en
 Data con valores por defecto (los de `filas` en su definición). Desde ahí,
 la Hoja es la fuente de verdad. Las columnas se leen por posición:
 renombrar un encabezado no rompe nada, reordenar columnas sí.
-- **Reglas de Estado** (`TABLA_REGLAS_ESTADO`, Script7): Orden | Columna
+- **Reglas de Estado** (`TABLA_REGLAS_ESTADO`, EvaluateStatuses): Orden | Columna
   | Condición | Valor | Solo si Estado es | Estado resultante.
-- **Configuración de Estados** (`TABLA_CONFIG_ESTADOS`, Script7): Estado
+- **Configuración de Estados** (`TABLA_CONFIG_ESTADOS`, EvaluateStatuses): Estado
   | Requiere acción | Pasa al banco de contenido | Filas de muestra en
   correo. El orden de las filas es el orden en que aparecen en el correo.
-- **Correo resumen** (`TABLA_CORREO_RESUMEN`, Script7): Clave | Valor.
+- **Correo resumen** (`TABLA_CORREO_RESUMEN`, EvaluateStatuses): Clave | Valor.
   Textos del correo (para usarlo en otro idioma) y la opción "Enviar
   aunque no haya cambios". Una clave que falte en la Hoja usa el valor por
   defecto del código.
-- **Idiomas** (`TABLA_IDIOMAS`, Script2): Código | hl | gl | Prefijos de
+- **Idiomas** (`TABLA_IDIOMAS`, Questions): Código | hl | gl | Prefijos de
   pregunta (separados por coma; la consulta sin prefijo va siempre).
 Siguen en columna A de Data, como antes: el catálogo de Estados (A2 hacia
 abajo, con su Description en B, que usa la fórmula de Notas) y la lista de
 Acción sugerida (bajo "Estado evaluacion de competencia").
 
 ## Evaluación automática de Estados (03/10/2026)
-`Script7_EvaluarEstados.js` → `evaluarEstados()` recalcula la columna
+`EvaluateStatuses.js` → `evaluarEstados()` recalcula la columna
 Estado de "Preguntas" con la tabla **Reglas de Estado** de Data, y manda
 por correo cuántas filas hay en cada Estado con "Requiere acción = Sí" en
 **Configuración de Estados**. Las reglas se aplican por Orden y gana la
@@ -141,7 +154,7 @@ Priorizada / "buscar long-tail" → Pendiente; Priorizada con volumen > 50
   el catálogo de Data, y que cada Condición sea una de
   `CONDICIONES_REGLA`. Si algo falla, corta con error.
 - Qué Estados pasan al banco de contenido también sale de Configuración
-  de Estados (columna "Pasa al banco de contenido"), no de Script5.
+  de Estados (columna "Pasa al banco de contenido"), no de ContentBank.
 - Sin trigger por código: crearlo a mano apuntando a `evaluarEstados`.
 - **Correo resumen** (HTML + versión en texto plano). Incluye:
   - Tabla Estado × pestaña con el total y la diferencia contra la última
@@ -176,7 +189,7 @@ aplicar el dropdown de Estado a toda la columna. Así un Estado nuevo del
 catálogo no aparece como inválido en las filas viejas.
 
 ## Verificación en el sitio web en vivo (03/10/2026)
-`Script8_VerificarWeb.js`, llamado desde `evaluarEstados()` antes de
+`VerifyWebsite.js`, llamado desde `evaluarEstados()` antes de
 aplicar las reglas. Comprueba en las páginas publicadas si cada keyword
 está aplicada:
 1. **Fuente de páginas:** la pestaña `Paginas_Sitio` (inventario de la
@@ -263,7 +276,7 @@ fecha no cumple ninguna).
 ## Columnas por encabezado, nunca por posición (03/10/2026)
 Todas las pestañas se leen y escriben ubicando cada columna por su
 encabezado (`columnasPorEncabezado_` / `columnasObligatorias_` en
-`Code.js`), porque se reordenan a mano. Las listas de Data también se
+`Core.js`), porque se reordenan a mano. Las listas de Data también se
 ubican por su encabezado (`leerBloqueData_`), no por fila fija. Bugs que
 motivaron el cambio: en Seguimiento, "Volumen mensual" pasó delante de
 "Acción propuesta", y `actualizarSeguimiento_` (que escribía por

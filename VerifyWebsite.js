@@ -1,6 +1,6 @@
 /**
  * === VERIFY KEYWORDS ON THE LIVE WEBSITE (03/10/2026) ===
- * Called by evaluarEstados() in Script7. Before applying the rules, it
+ * Called by evaluarEstados() in EvaluateStatuses. Before applying the rules, it
  * fills each row's COLUMNA_APLICADO_WEB with where the keyword appears on
  * the published site. The "Aplicado en web | has value → Aplicado en
  * publicación" rule in the Data "Reglas de Estado" table converts this
@@ -205,7 +205,7 @@ function avisarPaginasSinRegistrar_(destinos, opciones) {
 }
 
 /**
- * Like normalizarTexto_ in Script2, but preserves accents. Returns
+ * Like normalizarTexto_ in Questions, but preserves accents. Returns
  * lowercase letters/numbers separated by spaces. Used to match Odoo's SEO
  * panel when "Ignorar tildes" is No.
  */
