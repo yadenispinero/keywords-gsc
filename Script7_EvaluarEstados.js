@@ -1,44 +1,44 @@
 /**
- * === EVALUACIÓN AUTOMÁTICA DE ESTADOS (03/10/2026) ===
- * Recalcula la columna "Estado" de cada fila a partir de los datos ya
- * cargados en Pasos 2-4 (Posición autocompletado, Volumen mensual, Top 10
- * dominios, Acción sugerida). Al terminar, manda un correo con cuántas
- * filas hay en cada Estado que requiere acción.
+ * === AUTOMATIC STATUS EVALUATION (03/10/2026) ===
+ * Recalculates each row's "Estado" from data entered in Steps 2–4
+ * (Autocomplete position, monthly volume, top 10 domains, and suggested
+ * action). Then emails the number of rows in each Status that requires
+ * action.
  *
- * Nada de esto está fijo en el código — vive en tres tablas de la pestaña
- * "Data" (ver leerTablaData_ en Code.js), que se crean solas con los
- * valores por defecto de abajo la primera vez que se corre:
+ * These settings are not hard-coded; they live in three tables on the
+ * "Data" tab (see leerTablaData_ in Code.js). The tables are created with
+ * the defaults below the first time the script runs:
  *
- * - "Reglas de Estado": se aplican por Orden y gana la ÚLTIMA que se
- *   cumple (cada paso del embudo pisa al anterior). Si ninguna se cumple,
- *   la fila conserva su Estado. "Solo si Estado es" restringe la regla a
- *   filas que ya llevan ese Estado según las reglas anteriores (ej. pasar
- *   de Priorizada a urgente). Columna ubicada por encabezado (acepta
- *   prefijo: "Top 10 dominios" encuentra "Top 10 dominios (Paso 4)"); si
- *   la pestaña no tiene esa columna, la regla se ignora.
- * - "Configuración de Estados": por cada Estado, si requiere acción
- *   (entra en el correo resumen), si pasa al banco de contenido (lo usa
- *   publicarPriorizadasEnBancoDeContenido en Script5) y cuántas filas de
- *   muestra listar en el correo (0 o vacío = ninguna), y si está
- *   "Protegido": una fila en un Estado protegido (por defecto Descartada)
- *   no la cambia ninguna regla ni la verificación web.
- * - "Correo resumen": textos del correo (para usarlo en otro idioma) y la
- *   opción de no enviarlo cuando nada cambió. Ver enviarResumenEstados_.
+ * - "Reglas de Estado": evaluated by Order; the LAST matching rule wins,
+ *   so each funnel step can override the previous one. If no rule matches,
+ *   the row keeps its Status. "Solo si Estado es" restricts a rule to rows
+ *   already in a specified Status after earlier rules (for example, move
+ *   Priorizada to urgent). Columns are located by header (prefixes are
+ *   accepted: "Top 10 dominios" matches "Top 10 dominios (Paso 4)"). A rule
+ *   is skipped if its column is absent from a tab.
+ * - "Configuración de Estados": for each Status, whether it requires
+ *   action (included in the summary email), whether it passes to the
+ *   content bank (used by publicarPriorizadasEnBancoDeContenido in
+ *   Script5), how many sample rows to include in the email (0 or blank
+ *   means none), and whether it is "Protegido". Rules and web verification
+ *   do not change rows in a protected Status (default: Descartada).
+ * - "Correo resumen": email text (to support other languages) and whether
+ *   to send when nothing changed. See enviarResumenEstados_.
  *
- * Se recalculan todas las filas MENOS las que están en un Estado
- * protegido (ver estadosProtegidos_). Conviene correr primero
- * simularEvaluacionEstados().
+ * All rows are recalculated except those in a protected Status (see
+ * estadosProtegidos_). Run simularEvaluacionEstados() first when reviewing
+ * rule changes.
  *
- * Sin trigger creado por código (regla del proyecto) — agregarlo a mano:
- * Activadores → Añadir activador → "evaluarEstados".
+ * No trigger is created by code (project convention). Add one manually:
+ * Triggers → Add trigger → "evaluarEstados".
  */
 const CONFIG_EVALUACION = {
-  // Pestañas cuyo Estado se recalcula. Seguimiento no está por defecto:
-  // ahí el Estado lo guía la "Acción propuesta" de GSC.
+  // Tabs whose Status is recalculated. Seguimiento is excluded by default;
+  // its Status is guided by the GSC "Acción propuesta".
   HOJAS: ['Preguntas']
 };
 
-/** Condiciones que acepta la columna "Condición" de "Reglas de Estado". */
+/** Conditions accepted in the "Condición" column of "Reglas de Estado". */
 const CONDICIONES_REGLA = {
   'número ≥': (v, x) => numero_(v) >= numero_(x),
   'número >': (v, x) => numero_(v) > numero_(x),
@@ -49,7 +49,7 @@ const CONDICIONES_REGLA = {
   'igual a': (v, x) => texto_(v).toLowerCase() === texto_(x).toLowerCase(),
   'contiene': (v, x) => texto_(v).toLowerCase().indexOf(texto_(x).toLowerCase()) !== -1,
   'no contiene': (v, x) => texto_(v).toLowerCase().indexOf(texto_(x).toLowerCase()) === -1,
-  // Fechas (ej. "Fecha cambio en web"). Una celda sin fecha no cumple ninguna.
+   // Dates (for example, "Fecha cambio en web"). A cell without a date matches none.
   'días desde ≥': (v, x) => diasDesde_(v) >= numero_(x),
   'días desde <': (v, x) => diasDesde_(v) < numero_(x)
 };
@@ -64,20 +64,21 @@ const TABLA_REGLAS_ESTADO = {
     [4, 'Acción sugerida (competencia)', 'igual a', 'competir de frente', '', 'Priorizada'],
     [5, 'Acción sugerida (competencia)', 'igual a', 'buscar long-tail', '', 'Pendiente'],
     [6, 'Volumen mensual', 'número >', 50, 'Priorizada', 'Por optimizar — urgente'],
-    // Estas dos columnas las llena el generador del banco de contenido
-    // (MarcarKeywords.js en el proyecto de publicaciones). Van últimas para
-    // ganar sobre el resto; publicado después de generado, para ganarle.
+    // These two columns are populated by the content bank generator
+    // (MarcarKeywords.js in the publishing project). They are evaluated last
+    // so a published item overrides earlier rules, and published overrides
+    // generated.
     [7, 'Contenido generado', 'tiene valor', '', '', 'Contenido generado'],
     [8, 'Aplicado en publicación', 'tiene valor', '', '', 'Aplicado en publicación'],
-    // La llena la verificación en el sitio web en vivo (Script8).
+    // Populated by live website verification (Script8).
     [9, 'Aplicado en web', 'tiene valor', '', '', 'Aplicado en publicación'],
-    // Partes de una publicación en la web (03/10/2026): contenido = cuerpo,
-    // metadatos = meta description. "Aplicado en web" lista los campos de la
-    // mejor página entre corchetes, con "cuerpo" siempre al final.
+    // Published page components (03/10/2026): content = body, metadata =
+    // meta description. "Aplicado en web" lists fields from the best page
+    // in brackets, with "cuerpo" always last.
     [10, 'Aplicado en web', 'contiene', 'cuerpo]', 'Aplicado en publicación', 'Pendiente de metadatos'],
     [11, 'Aplicado en web', 'contiene', 'descripción', 'Aplicado en publicación', 'Pendiente de contenido'],
     [12, 'Aplicado en web', 'contiene', 'descripción', 'Pendiente de metadatos', 'Aplicado en publicación'],
-    // Recién aplicada en las dos partes: esperar antes de medir el efecto (TP-36).
+    // Newly applied in both parts: wait before measuring the effect (TP-36).
     [13, 'Fecha cambio en web', 'días desde <', 28, 'Aplicado en publicación', 'En medición']
   ],
   listas: { 'Condición': Object.keys(CONDICIONES_REGLA) }
@@ -105,13 +106,13 @@ const TABLA_CONFIG_ESTADOS = {
 };
 
 /**
- * Estados "Protegido" de "Configuración de Estados": decisiones manuales
- * que NADA automático cambia — ni las reglas, ni la verificación web, ni
- * el marcador del banco de contenido (03/10/2026: la primera corrida real
- * sacó de "Descartada" 406 filas porque las reglas recalculaban todo). Si
- * la celda está vacía (columna recién agregada a una tabla vieja), vale
- * el valor por defecto de TABLA_CONFIG_ESTADOS — así Descartada queda
- * protegida aunque nadie haya llenado la columna.
+ * "Protegido" statuses in "Configuración de Estados": manual decisions
+ * that no automation changes—not rules, web verification, or the content
+ * bank marker. On 03/10/2026, the first real run moved 406 rows out of
+ * "Descartada" because the rules recalculated every row. If the cell is
+ * blank (for example, the column was added to an older table), use the
+ * default from TABLA_CONFIG_ESTADOS so Descartada remains protected even
+ * when the column has not been filled in.
  */
 function estadosProtegidos_() {
   const porDefecto = {};
@@ -121,8 +122,8 @@ function estadosProtegidos_() {
   const protegidos = tabla
     .filter(f => esSi_(tieneValor_(f['Protegido']) ? f['Protegido'] : (porDefecto[texto_(f['Estado'])] || 'No')))
     .map(f => texto_(f['Estado']));
-  // Un Estado protegido por defecto que ni siquiera está en la tabla (fila
-  // borrada, versión vieja restaurada) sigue protegido.
+  // A Status protected by default stays protected even if it is missing
+  // from the table (for example, after a row is deleted or an old version restored).
   Object.keys(porDefecto)
     .filter(e => esSi_(porDefecto[e]) && enTabla.indexOf(e) === -1)
     .forEach(e => protegidos.push(e));
@@ -130,9 +131,9 @@ function estadosProtegidos_() {
 }
 
 /**
- * Textos del correo resumen + opciones. Clave | Valor. Una clave que falte
- * en la Hoja usa el valor de aquí (así una versión nueva puede sumar
- * claves sin romper instalaciones viejas).
+ * Summary email text and options, as Key | Value pairs. Missing keys in
+ * the sheet use these defaults, allowing new versions to add keys without
+ * breaking older installations.
  */
 const TABLA_CORREO_RESUMEN = {
   titulo: 'Correo resumen',
@@ -147,7 +148,7 @@ const TABLA_CORREO_RESUMEN = {
     ['Columna vs. anterior', 'vs. corrida anterior'],
     ['Columna Qué hacer', 'Qué hacer'],
     ['Título cambios', 'Cambios de Estado en'],
-    // Cuántas filas listar debajo de cada cambio (ej. "Aplicado → Pendiente").
+    // Number of rows to list under each change (for example, "Aplicado → Pendiente").
     ['Filas por cambio', 30],
     ['Título muestra', 'Primeras filas en'],
     ['Sin datos', '(ninguno)'],
@@ -157,15 +158,15 @@ const TABLA_CORREO_RESUMEN = {
   listas: {}
 };
 
-/** Script Property donde se guarda el conteo de la última corrida real (para la columna "vs. anterior"). */
+/** Script Property storing counts from the last real run (for the "vs. previous" column). */
 const PROPIEDAD_ULTIMO_CONTEO = 'ULTIMO_CONTEO_ESTADOS';
 
-/** Recalcula y ESCRIBE los Estados, y manda el correo resumen. */
+/** Recalculates and WRITES Status values, then sends the summary email. */
 function evaluarEstados() {
   evaluarEstados_(false);
 }
 
-/** Igual que evaluarEstados(), pero sin escribir nada: solo log + correo con lo que cambiaría. */
+/** Like evaluarEstados(), but makes no changes; logs and emails the proposed changes. */
 function simularEvaluacionEstados() {
   evaluarEstados_(true);
 }
@@ -173,9 +174,9 @@ function simularEvaluacionEstados() {
 function evaluarEstados_(simular) {
   const reglas = leerReglasEstado_();
   verificarEstadosConfigurados_(reglas);
-  // Seguro (03/10/2026): restaurar una versión vieja de la Hoja revierte
-  // también la pestaña Data. Ahí se perdió la regla 9, y la columna
-  // "Aplicado en web" se llenaba sin que ningún Estado la reflejara.
+  // Safety check (03/10/2026): restoring an old spreadsheet version also
+  // reverts the Data tab. Rule 9 was lost this way, leaving "Aplicado en
+  // web" populated without a corresponding Status.
   if (paginasWeb_() && !reglas.some(r => normalizarTexto_(r.columna) === normalizarTexto_(COLUMNA_APLICADO_WEB))) {
     avisosVerificacionWeb_().push('La columna "' + COLUMNA_APLICADO_WEB + '" se llenó, pero ninguna regla de "'
       + TABLA_REGLAS_ESTADO.titulo + '" (Data) la usa: no se marcará "Aplicado en publicación". Falta la regla '
@@ -199,11 +200,11 @@ function evaluarEstados_(simular) {
     filasPorHoja[nombre] = resultado.filas;
   });
 
-  // Keywords encontradas por página → pestaña de páginas del sitio (Script8).
+  // Write keywords found per page to the site page inventory tab (Script8).
   if (!simular) escribirKeywordsEnPaginas_();
 
-  // Pestañas evaluadas: Estados desde memoria (en simulación la Hoja
-  // todavía no los tiene). El resto de pestañas con Estado: en vivo.
+  // For evaluated tabs, use in-memory Status values (the sheet has not
+  // been updated during simulation). For other tabs with Status, use live values.
   const hojas = {};
   hojasConEstado_().forEach(nombre => {
     const sheet = ss.getSheetByName(nombre);
@@ -215,7 +216,7 @@ function evaluarEstados_(simular) {
   enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, detallesPorHoja, simular);
 }
 
-/** Reglas de la tabla "Reglas de Estado", ordenadas, con su condición ya resuelta a función. */
+/** Ordered rules from "Reglas de Estado", with each condition resolved to a function. */
 function leerReglasEstado_() {
   return leerTablaData_(TABLA_REGLAS_ESTADO)
     .filter(r => tieneValor_(r['Columna']) && tieneValor_(r['Estado resultante']))
@@ -236,7 +237,7 @@ function leerReglasEstado_() {
     .sort((a, b) => a.orden - b.orden);
 }
 
-/** Estados de "Configuración de Estados" con "Sí" en la columna `campo`. */
+/** Status values in "Configuración de Estados" whose `campo` column is set to "Sí". */
 function estadosConfigurados_(campo) {
   return leerTablaData_(TABLA_CONFIG_ESTADOS)
     .filter(f => esSi_(f[campo]))
@@ -244,10 +245,10 @@ function estadosConfigurados_(campo) {
 }
 
 /**
- * Aplica las reglas a cada fila de `sheet`. Devuelve { cambios: {"A → B": n},
- * filas: [{ fila, etiqueta, estado }] } (mismo formato que filasConEstado_).
- * Escribe la columna Estado en un solo bloque, y
- * solo si algo cambió y no es simulación.
+ * Applies the rules to each row in `sheet`. Returns { cambios: {"A → B": n},
+ * filas: [{ fila, etiqueta, estado }] } (same format as filasConEstado_).
+ * Writes the Status column in one block, and only when values changed and
+ * this is not a simulation.
  */
 function evaluarHoja_(sheet, reglas, simular) {
   const colHoja = columnasPorEncabezado_(sheet);
@@ -256,9 +257,9 @@ function evaluarHoja_(sheet, reglas, simular) {
 
   const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
 
-  // Verificación en el sitio web en vivo (Script8): llena en memoria la
-  // columna "Aplicado en web" antes de aplicar las reglas. Si la columna
-  // todavía no existe, se usa la siguiente libre (se crea al escribir).
+  // Live website verification (Script8) fills "Aplicado en web" in memory
+  // before applying the rules. If the column does not exist, use the next
+  // available column; it is created when values are written.
   const protegidos = estadosProtegidos_();
   const esProtegida = fila => protegidos.indexOf(texto_(fila[colEstado - 1])) !== -1;
   const paginas = paginasWeb_();
@@ -277,10 +278,10 @@ function evaluarHoja_(sheet, reglas, simular) {
       const antes = texto_(fila[colWeb - 1]);
       const idioma = colIdioma ? texto_(fila[colIdioma - 1]) : '';
       if (esProtegida(fila)) {
-        // El Estado no se toca y la columna queda vacía (un valor ahí haría
-        // que la regla 9 la marcara si algún día se desprotege). Si aparece
-        // en el sitio, se avisa en el correo: una keyword descartada puede
-        // estar usándose sin querer (ej. en un title).
+        // Do not change Status and leave this column blank (a value here
+        // would trigger rule 9 if the row were ever unprotected). If it
+        // appears on the site, report it by email: a discarded keyword may
+        // be in use unintentionally, for example in a title.
         fila[colWeb - 1] = '';
         fila[colFecha - 1] = '';
         const visto = aplicadoEnWeb_(fila[0], paginas, idioma, false);
@@ -289,10 +290,10 @@ function evaluarHoja_(sheet, reglas, simular) {
       }
       const ahora = aplicadoEnWeb_(fila[0], paginas, idioma, true);
       fila[colWeb - 1] = ahora;
-      // "Fecha cambio en web": cuándo cambió por última vez dónde aparece la
-      // keyword (página o campos). Empieza la espera de medición (regla 13).
-      // Las que ya estaban aplicadas antes de esta columna toman la fecha de
-      // la primera corrida, porque la real no se conoce.
+      // "Fecha cambio en web": the last time the keyword's page or matching
+      // fields changed. Starts the measurement wait (rule 13). For keywords
+      // already applied before this column existed, use the first run date
+      // because the actual change date is unknown.
       if (!ahora) fila[colFecha - 1] = '';
       else if (ahora !== antes || !tieneValor_(fila[colFecha - 1])) fila[colFecha - 1] = hoy;
     });
@@ -311,13 +312,13 @@ function evaluarHoja_(sheet, reglas, simular) {
     });
 
   const cambios = {};
-  const detalle = {}; // { "A → B": [{ fila, etiqueta }] } para listar en el correo
+  const detalle = {}; // { "A → B": [{ fila, etiqueta }] } for listing in the email.
   const filas = [];
   let huboCambios = false;
 
   const estados = datos.map((fila, i) => {
     const actual = fila[colEstado - 1];
-    if (fila.every(v => v === '')) return [actual]; // fila vacía
+    if (fila.every(v => v === '')) return [actual]; // Blank row.
     if (esProtegida(fila)) {
       filas.push({ fila: i + 2, etiqueta: texto_(fila[0]), estado: actual });
       return [actual];
@@ -350,8 +351,8 @@ function evaluarHoja_(sheet, reglas, simular) {
       sheet.getRange(2, colFecha, datos.length, 1).setNumberFormat('yyyy-mm-dd');
     }
     if (huboCambios) sheet.getRange(2, colEstado, estados.length, 1).setValues(estados);
-    // Dropdown al día con el catálogo de Data (si se agregó un Estado nuevo,
-    // las filas viejas lo marcaban como inválido).
+    // Keep the dropdown aligned with the Data catalog; otherwise a newly
+    // added Status would appear invalid in existing rows.
     aplicarValidacionEstado_(sheet, 2, estados.length, colEstado);
   }
   Logger.log('"' + sheet.getName() + '": ' + Object.keys(cambios).length + ' tipo(s) de cambio'
@@ -360,9 +361,9 @@ function evaluarHoja_(sheet, reglas, simular) {
 }
 
 /**
- * Cada Estado usado en las tablas de configuración debe existir en el
- * catálogo de Data (si no, el dropdown lo marca como inválido, o un typo
- * deja una regla sin efecto). Corta antes de escribir nada.
+ * Every Status used in configuration tables must exist in the Data
+ * catalog. Otherwise, the dropdown marks it invalid or a typo makes a
+ * rule ineffective. Stop before writing any changes.
  */
 function verificarEstadosConfigurados_(reglas) {
   const validos = leerEstadosValidos_();
@@ -377,14 +378,14 @@ function verificarEstadosConfigurados_(reglas) {
 }
 
 /**
- * Correo resumen (03/10/2026). Todo lo que identifica la instalación o el
- * idioma sale de configuración: textos de la tabla "Correo resumen",
- * Estados y filas de muestra de "Configuración de Estados", "Qué hacer"
- * de la Description del catálogo de Estados, prefijo del asunto de la
- * Script Property NOMBRE_INSTALACION (ver enviarCorreo_ en Code.js).
- * Incluye: tabla Estado × pestaña con total y diferencia contra la última
- * corrida real, enlaces a la Hoja / pestañas / filas, cambios de Estado de
- * esta corrida y las primeras N filas de los Estados que lo pidan.
+ * Summary email (03/10/2026). Installation-specific and language content
+ * comes from configuration: text from "Correo resumen", Status values and
+ * sample rows from "Configuración de Estados", action guidance from the
+ * Status catalog descriptions, and the subject prefix from the
+ * NOMBRE_INSTALACION Script Property (see enviarCorreo_ in Code.js).
+ * Includes a Status-by-tab table with totals and changes since the last
+ * real run, links to the spreadsheet/tabs/rows, this run's Status changes,
+ * and the first N rows for configured Status values.
  */
 function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, detallesPorHoja, simular) {
   const t = textosCorreo_();
@@ -451,15 +452,15 @@ function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, detallesPorH
       + '</table>';
   }
 
-  // --- Texto plano (mismo contenido, sin formato) ---
+  // --- Plain text (same content, without formatting) ---
   let texto = (simular ? t['Aviso simulación'] + '\n\n' : '')
     + t['Título'] + ' — ' + hoy + '\n' + ss.getUrl() + '\n\n' + t['Título tabla'] + ':\n';
   texto += filasTabla.length === 0 ? '  ' + t['Sin datos'] + '\n' : filasTabla.map(estado =>
     '  - ' + estado + ': ' + actual[estado] + ' (' + diferencia(estado) + ')'
     + desglosePorHoja_(conteos, estado)).join('\n') + '\n';
 
-  // Cambios de esta corrida: total por cambio y, debajo, qué filas
-  // (hasta "Filas por cambio"), con enlace a cada una.
+  // Changes from this run: count per transition, followed by the affected
+  // rows (up to "Filas por cambio"), with a link to each row.
   const maxFilas = numero_(t['Filas por cambio']) >= 0 ? numero_(t['Filas por cambio']) : 30;
   Object.keys(cambiosPorHoja).forEach(nombre => {
     const cambios = cambiosPorHoja[nombre];
@@ -488,7 +489,7 @@ function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, detallesPorH
     html += '</ul>';
   });
 
-  // Filas de muestra
+  // Sample rows.
   config.forEach(f => {
     const estado = texto_(f['Estado']);
     const n = numero_(f['Filas de muestra en correo']);
@@ -505,7 +506,7 @@ function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, detallesPorH
       + visibles.map(m => '  - ' + m.x.etiqueta + ' (' + m.hoja + ', fila ' + m.x.fila + ')').join('\n') + '\n';
   });
 
-  // Avisos de la verificación web: URLs que fallaron, páginas sin registrar.
+  // Web verification warnings: failed URLs and unregistered pages.
   const avisos = avisosVerificacionWeb_();
   if (avisos.length > 0) {
     html += '<h3>' + e(t['Título avisos web']) + '</h3><ul>' + avisos.map(a => '<li>' + e(a) + '</li>').join('') + '</ul>';
@@ -516,7 +517,7 @@ function enviarResumenEstados_(hojas, filasPorHoja, cambiosPorHoja, detallesPorH
   enviarCorreo_(t['Asunto'] + ' ' + hoy + (simular ? ' (SIMULACIÓN)' : ''), texto, html);
 }
 
-/** Tabla "Correo resumen" → { clave: valor }, con los valores por defecto para las claves que falten. */
+/** "Correo resumen" table → { key: value }, including defaults for missing keys. */
 function textosCorreo_() {
   const textos = {};
   TABLA_CORREO_RESUMEN.filas.forEach(([clave, valor]) => { textos[clave] = valor; });
@@ -526,7 +527,7 @@ function textosCorreo_() {
   return textos;
 }
 
-/** " — Preguntas 12, Seguimiento 3" — solo si el Estado aparece en más de una pestaña. */
+/** " — Preguntas 12, Seguimiento 3"; included only if the Status appears on multiple tabs. */
 function desglosePorHoja_(conteos, estado) {
   const partes = Object.keys(conteos).filter(h => conteos[h][estado]).map(h => h + ' ' + conteos[h][estado]);
   return partes.length > 1 ? ' — ' + partes.join(', ') : '';
@@ -540,8 +541,8 @@ function tieneValor_(v) {
   return texto_(v) !== '';
 }
 
-/** Número de la celda, o NaN si está vacía o es texto (ej. "Sin sugerencias"). */
-/** Días enteros desde la fecha de la celda hasta hoy, o NaN si no es una fecha. */
+/** Numeric cell value, or NaN if blank or text (for example, "Sin sugerencias"). */
+/** Whole days from the cell date to today, or NaN if the cell is not a date. */
 function diasDesde_(v) {
   const fecha = v instanceof Date ? v : (tieneValor_(v) ? new Date(texto_(v)) : null);
   if (!fecha || isNaN(fecha.getTime())) return NaN;

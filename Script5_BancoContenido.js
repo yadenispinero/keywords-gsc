@@ -1,40 +1,40 @@
 /**
- * === PUENTE HACIA EL BANCO DE CONTENIDO ===
- * Conecta el resultado de [A.1] con el flujo de contenido: las preguntas
- * de "Preguntas" (Paso 2, temas nuevos que no tienen página todavía) cuyo
- * Estado tenga "Sí" en la columna "Pasa al banco de contenido" de la tabla
- * "Configuración de Estados" (Data — ver Script7_EvaluarEstados.js) se
- * agregan como fila mínima a la pestaña del banco de contenido (otra Hoja
- * distinta, por ID).
+ * === CONTENT BANK INTEGRATION ===
+ * Connects the output of [A.1] to the content workflow. Questions in
+ * "Preguntas" (Step 2; new topics that do not yet have a page) are added
+ * as minimal rows to the content bank tab when their Status is marked
+ * "Yes" in the "Pasa al banco de contenido" column of the "Configuración
+ * de Estados" table on Data (see Script7_EvaluarEstados.js). The content
+ * bank is a separate spreadsheet, opened by ID.
  *
- * Las keywords de "Seguimiento" (Paso 1) NO se mandan aquí — ya tienen
- * página rankeando en Search Console, su ruta es optimizar lo existente
- * (tarea [A.3]), no crear contenido nuevo.
+ * Keywords in "Seguimiento" (Step 1) are not sent here: they already have
+ * a page ranking in Search Console, so they should be used to optimize
+ * existing content (task [A.3]), not to create new content.
  *
- * Todo lo que identifica la instalación vive en Script Properties (⚙️
- * Configuración del proyecto → Script Properties), no en el código:
+ * Installation-specific values are stored in Script Properties (Project
+ * Settings → Script Properties), not in the code:
  * - `BANCO_SPREADSHEET_ID` y `BANCO_HOJA` (obligatorias, 03/10/2026):
- *   Hoja de cálculo y pestaña del banco de contenido.
- * - `DEFAULT_ESPACIO`, `DEFAULT_CANALES` (opcionales): valores por defecto
- *   de la fila nueva. Deben coincidir literalmente con los catálogos de la
- *   pestaña de nomencladores del banco de contenido.
+  *   Content bank spreadsheet and tab.
+  * - `DEFAULT_ESPACIO`, `DEFAULT_CANALES` (optional): defaults for the new
+  *   row. They must exactly match the catalogs on the content bank's
+  *   nomencladores tab.
  * - `EMAIL_RESUMEN` (vía emailResumen_() en Code.js).
- * `Estrategia` por defecto sí queda en `CONFIG_BANCO` — no identifica
- * ninguna empresa, es solo una categoría del embudo de contenido.
+ * The default `Estrategia` remains in `CONFIG_BANCO`: it does not identify
+ * a company; it is simply a content-funnel category.
  *
- * FIX 12/09/2026: la pestaña del banco cambia de estructura seguido. Antes
- * este script escribía por POSICIÓN fija — cualquier reordenamiento
- * desalineaba los valores sin avisar. Ahora ubica cada columna por su
- * ENCABEZADO en vivo.
+ * FIX 12/09/2026: the content bank tab changes structure frequently. This
+ * script used to write by fixed position, so reordering columns silently
+ * misaligned values. It now locates each column by its current header.
  *
- * El resto de columnas (Contenido base, Enfoque, Tono, etc.) quedan
- * vacías a propósito — es trabajo editorial manual, o se busca en
- * vivo desde Nomencladores por el generador (no se duplica aquí).
+ * Other columns (Base content, Focus, Tone, etc.) are intentionally left
+ * blank. They are completed manually as editorial work or looked up live
+ * from Nomencladores by the content generator; this script does not
+ * duplicate that logic.
  */
 const CONFIG_BANCO = {
-  // No identifica ninguna empresa — solo la categoría de embudo por
-  // defecto para contenido nuevo. Ajustar aquí si cambia el catálogo de
-  // Estrategia en Nomencladores.
+  // This does not identify a company; it is only the default funnel
+  // category for new content. Update it if the Estrategia catalog in
+  // Nomencladores changes.
   DEFAULT_ESTRATEGIA: '02. Contenidos TOFU'
 };
 
@@ -43,12 +43,11 @@ function hojaBanco_() {
 }
 
 /**
- * Encabezado → valor por defecto para las columnas que sí rellenamos al
- * crear una fila nueva. Espacio/Canales vienen de Script Properties (son
- * específicos de la empresa); Estrategia viene de `CONFIG_BANCO`. Cualquier
- * columna del banco que no tenga valor configurado (ni sea "Idea
- * original")
- * queda vacía — no es un error, solo faltaría rellenarla a mano.
+ * Header-to-default mapping for columns populated when a new row is
+ * created. Espacio/Canales come from Script Properties because they are
+ * company-specific; Estrategia comes from `CONFIG_BANCO`. Any content
+ * bank column without a configured value (other than "Idea original") is
+ * left blank. This is expected; it can be filled in manually.
  */
 function valoresPorDefectoBanco_() {
   const props = PropertiesService.getScriptProperties();
@@ -60,9 +59,10 @@ function valoresPorDefectoBanco_() {
 }
 
 /**
- * Función principal: agrega al banco de contenido las preguntas nuevas
- * en un Estado que "Pasa al banco de contenido", y manda un correo resumen con lo agregado +
- * el total de filas por Estado en "Seguimiento" y "Preguntas".
+ * Main entry point: adds new questions to the content bank when their
+ * Status is configured to pass to the bank. Sends a summary email with
+ * the added topics and row counts by Status for "Seguimiento" and
+ * "Preguntas".
  */
 function publicarPriorizadasEnBancoDeContenido() {
   const temasNuevos = agregarPriorizadasAlBanco_();

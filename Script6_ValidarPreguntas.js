@@ -1,48 +1,45 @@
 /**
- * === VALIDAR PREGUNTAS YA ESCRITAS CONTRA EL AUTOCOMPLETADO DE GOOGLE ===
- * A diferencia de investigarPreguntasAutocomplete() (Script2_Preguntas.gs,
- * Paso 2: semilla + prefijo -> genera preguntas nuevas), esta función NO
- * genera preguntas: toma preguntas ya escritas completas en la pestaña
- * "Preguntas" (pegadas a mano, sin pasar por el Paso 2) y valida si son
- * demanda real -- consulta el mismo endpoint de autocompletado de Google
- * con la pregunta completa como consulta, y si el autocompletado devuelve
- * esa misma pregunta (o una muy parecida) entre sus sugerencias, registra
- * en qué posición (1, 2, 3...) salió. Reutiliza CONFIG_PREGUNTAS y
- * consultarAutocomplete_() ya definidos en Script2_Preguntas.gs (mismo
- * proyecto, mismo scope global).
+ * === VALIDATE EXISTING QUESTIONS AGAINST GOOGLE AUTOCOMPLETE ===
+ * Unlike investigarPreguntasAutocomplete() in Script2_Preguntas.js (Step
+ * 2: seed + prefix generates new questions), this function does not
+ * generate questions. It takes complete questions already entered in the
+ * "Preguntas" tab (for example, pasted manually without Step 2) and checks
+ * whether they show demand. It queries Google's Autocomplete endpoint
+ * with the complete question and records the suggestion's position (1, 2,
+ * 3, ...) if Google returns the same or a similar question. It reuses
+ * CONFIG_PREGUNTAS and consultarAutocomplete_() from Script2_Preguntas.js
+ * in the same project and global scope.
  *
- * Qué fila procesa: cualquier fila de "Preguntas" con columna "Pregunta"
- * no vacía y columna "Posición autocompletado" vacía -- no una fila fija
- * (ej. "desde la 43"), para que sea seguro volver a correrla más adelante
- * sin repetir trabajo ya hecho.
+ * Rows processed: any row in "Preguntas" where "Pregunta" is not blank
+ * and "Posición autocompletado" is blank. It does not start at a fixed
+ * row (such as row 43), so it is safe to rerun without repeating completed
+ * work.
  *
- * Qué escribe: SOLO "Posición autocompletado" y "Fecha detectada" (si
- * estaba vacía). Nunca toca Estado/Notas de filas existentes -- mismo
- * criterio que escribirPreguntasNuevas_ en Script2_Preguntas.gs.
+ * Writes only "Posición autocompletado" and "Fecha detectada" (if blank).
+ * It never changes Status or Notes on existing rows, matching
+ * escribirPreguntasNuevas_ in Script2_Preguntas.js.
  *
- * Columnas localizadas por encabezado (fila 1), no por posición fija --
- * mismo patrón que Script5_BancoContenido.gs, para sobrevivir si se
- * reordenan columnas.
+ * Columns are located by their headers (row 1), not by fixed positions.
+ * This follows the pattern used in Script5_BancoContenido.js and remains
+ * safe if columns are reordered.
  *
- * FIX 13/09/2026: consultarAutocomplete_() devuelve `null` cuando la
- * llamada en sí falló (timeout, bloqueo temporal, respuesta no-200) --
- * antes devolvía `[]` en ese caso, indistinguible de "consulta real sin
- * sugerencias", así que un fallo transitorio de red quedaba grabado como
- * "Sin sugerencias" PARA SIEMPRE (el criterio de "ya validada" es que la
- * celda no esté vacía, y esa fila nunca se iba a reintentar). Ahora, si
- * la llamada falló, la fila se deja sin tocar y se reintenta en la
- * próxima corrida.
+ * FIX 13/09/2026: consultarAutocomplete_() returns `null` when the request
+ * itself fails (timeout, temporary block, or non-200 response). It used
+ * to return `[]` for failures, indistinguishable from a successful query
+ * with no suggestions. A temporary network failure was therefore saved
+ * as "Sin sugerencias" permanently because any nonblank cell counted as
+ * validated. Failed requests now leave the row untouched so it can be
+ * retried on the next run.
  *
- * FIX 13/09/2026-B: usaba SpreadsheetApp.getActiveSpreadsheet(), que lanzó
- * "Sheet <id> not found" -- Google guarda internamente qué pestaña estaba
- * activa, y ese puntero quedó apuntando a un ID de una pestaña "Preguntas"
- * vieja ya borrada (la actual tiene otro ID). SpreadsheetApp.openById()
- * abre el archivo directo por su ID real, sin depender de ese puntero. El
- * ID vive en Script Properties (SPREADSHEET_ID, vía hojaDeCalculo_() en
- * Code.js) -- no hardcodeado, mismo criterio que el resto del proyecto.
+ * FIX 13/09/2026-B: SpreadsheetApp.getActiveSpreadsheet() failed with
+ * "Sheet <id> not found" because Google retained a pointer to a deleted
+ * "Preguntas" tab. SpreadsheetApp.openById() opens the spreadsheet by its
+ * actual ID and avoids that pointer. The ID is stored in Script Properties
+ * as SPREADSHEET_ID (through hojaDeCalculo_() in Code.js), not hard-coded,
+ * consistent with the rest of the project.
  *
- * Para programarla luego: Activadores (reloj, barra izquierda) -> Añadir
- * activador -> función "validarPreguntasExistentes" -> tiempo que decidas.
+ * To schedule it: Triggers (clock icon in the left sidebar) → Add trigger
+ * → choose validarPreguntasExistentes → select the desired schedule.
  */
 function validarPreguntasExistentes() {
   const sheet = hojaDeCalculo_().getSheetByName(CONFIG_PREGUNTAS.HOJA_PREGUNTAS);
@@ -64,7 +61,7 @@ function validarPreguntasExistentes() {
     const filaReal = idx + 2;
     const pregunta = (fila[col['Pregunta'] - 1] || '').toString().trim();
     const posicionActual = fila[col['Posición autocompletado'] - 1];
-    if (!pregunta || posicionActual !== '') return; // ya validada o vacía
+    if (!pregunta || posicionActual !== '') return; // Already validated or blank.
 
     const codigoIdioma = (fila[col['Idioma'] - 1] || '').toString().trim().toUpperCase();
     const idioma = idiomas.find(i => i.codigo === codigoIdioma);
@@ -75,8 +72,8 @@ function validarPreguntasExistentes() {
 
     const sugerencias = consultarAutocomplete_(pregunta, idioma.hl, idioma.gl);
     if (sugerencias === null) {
-      // Fallo de la llamada, no "sin sugerencias real" -- no se escribe
-      // nada, queda pendiente para la próxima corrida (ver FIX 13/09/2026).
+      // The request failed; this is not a confirmed "no suggestions" result.
+      // Leave the row unchanged so it can be retried (see FIX 13/09/2026).
       fallosDeRed++;
       Logger.log('Fila ' + filaReal + ': fallo de red al consultar, se reintenta la próxima corrida.');
       return;
@@ -86,7 +83,7 @@ function validarPreguntasExistentes() {
     const preguntaNorm = pregunta.toLowerCase();
     let posicion = sugerencias.findIndex(s => s.toString().trim().toLowerCase() === preguntaNorm);
     if (posicion === -1) {
-      // sin match exacto: probar si alguna sugerencia empieza con la pregunta completa
+      // No exact match: check whether any suggestion starts with the full question.
       posicion = sugerencias.findIndex(s => s.toString().trim().toLowerCase().indexOf(preguntaNorm) === 0);
     }
 

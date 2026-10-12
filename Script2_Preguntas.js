@@ -1,42 +1,42 @@
 /**
- * === CONFIGURACIÓN LOCAL DE ESTE SCRIPT (Paso 2 — descubrir preguntas) ===
- * Automatiza la extracción del Paso 2 de [A.1]: en vez de AlsoAsked (sin
- * API gratis), usa el endpoint de autocompletado de Google — gratis, sin
- * autenticación, sin CAPTCHA/bloqueo de bots (pensado para ser consultado
- * constantemente por navegadores). No es un árbol tan rico como AlsoAsked
- * (que combina esto con "People Also Ask"), pero cubre la misma intención
- * sin costo. El filtrado fino de ruido queda manual (columna Estado) —
- * el volumen aquí es bajo (unas pocas decenas de sugerencias por
- * trimestre), no vale la pena meterle una pasada de IA.
+ * === LOCAL CONFIGURATION FOR THIS SCRIPT (Step 2 — discover questions) ===
+ * Automates Step 2 of [A.1]. Instead of AlsoAsked (which has no free API),
+ * it uses Google's Autocomplete endpoint. It is free, requires no
+ * authentication, and is designed for frequent browser requests, so it
+ * does not require CAPTCHA or bot-block workarounds. Its results are not
+ * as rich as AlsoAsked, which combines Autocomplete with "People Also
+ * Ask", but it serves the same purpose at no cost. Fine-grained noise
+ * filtering remains manual in the Status column. The volume is low (a few
+ * dozen suggestions per quarter), so an AI filtering pass is not needed.
  *
- * Multi-idioma: cada término semilla se consulta en todos los idiomas de
- * la tabla "Idiomas" de la pestaña Data (03/10/2026 — antes fijos en el
- * código) — cada idioma con sus propios prefijos de pregunta (no tiene
- * sentido buscar "qué es" en una consulta en inglés) y su propio hl/gl
- * para que el autocompletado devuelva resultados de ese mercado. Agregar
- * o quitar un mercado se hace en esa tabla, sin tocar código. Cada
- * resultado se etiqueta con el código del idioma consultado.
+ * Multiple languages: each seed is queried in every language listed in
+ * the "Idiomas" table on the Data tab (as of 03/10/2026; these were
+ * previously hard-coded). Each language has its own question prefixes
+ * (for example, "qué es" is not useful for an English query) and hl/gl
+ * values so Autocomplete returns results for the relevant market. Add or
+ * remove a market in that table without changing the code. Each result is
+ * tagged with the code of the queried language.
  *
- * Semillas por idioma/localización (12/09/2026): la pestaña "Semillas"
- * acepta 2 columnas opcionales además del término — "Idiomas" (ej. "EN"
- * o "EN,DE"; vacío = todos) para semillas que solo aplican a un mercado,
- * y "Localización" (ej. una ciudad) para acotar la búsqueda. El
- * autocompletado de Google no tiene un parámetro de geolocalización a
- * nivel de ciudad — la única forma real de acotar es meter el lugar como
- * texto dentro de la consulta misma (ej. "<término> <ciudad>").
+ * Seeds by language/location (12/09/2026): the "Semillas" tab accepts two
+ * optional columns in addition to the term: "Idiomas" (for example, "EN"
+ * or "EN,DE"; blank means all languages) to restrict a seed to specific
+ * markets, and "Localización" (for example, a city) to narrow the query.
+ * Google Autocomplete has no city-level geolocation parameter. The only
+ * practical way to narrow the query is to include the place in the query
+ * text itself (for example, "<term> <city>").
  */
 const CONFIG_PREGUNTAS = {
   HOJA_SEMILLAS: 'Semillas',
   HOJA_PREGUNTAS: 'Preguntas',
   PAUSA_ENTRE_LLAMADAS_MS: 200,
-  TIEMPO_MAX_MS: 4.5 * 60 * 1000, // margen bajo el límite de 6 min de Apps Script para escribir lo encontrado
-  MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA: 15 // tope por cada combinación semilla+idioma
+  TIEMPO_MAX_MS: 4.5 * 60 * 1000, // Stop early enough to write results before Apps Script's 6-minute limit.
+  MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA: 15 // Maximum per seed-and-language combination.
 };
 
 /**
- * Tabla "Idiomas" de Data. Prefijos separados por coma; la consulta sin
- * prefijo (solo el término) se hace siempre, primero. Los valores de
- * `filas` son solo los de arranque de una instalación nueva.
+ * The "Idiomas" table on Data. Prefixes are comma-separated; the query
+ * without a prefix (the seed term alone) is always sent first. `filas`
+ * contains only the initial defaults for a new installation.
  */
 const TABLA_IDIOMAS = {
   titulo: 'Idiomas',
@@ -48,7 +48,7 @@ const TABLA_IDIOMAS = {
   ]
 };
 
-/** Idiomas configurados → [{ codigo, hl, gl, prefijos: ['', ...] }]. */
+/** Configured languages → [{ codigo, hl, gl, prefijos: ['', ...] }]. */
 function idiomas_() {
   return leerTablaData_(TABLA_IDIOMAS).map(f => ({
     codigo: f['Código'].toString().trim().toUpperCase(),
@@ -59,14 +59,14 @@ function idiomas_() {
 }
 
 /**
- * Lee las semillas de la pestaña "Semillas" (columnas A:C, desde la fila
- * 2: Término semilla | Idiomas | Localización), consulta el
- * autocompletado de Google con cada prefijo de cada idioma aplicable
- * (todos por defecto, o solo los que indique la columna Idiomas),
- * agregando la Localización a la consulta si está presente. Descarta lo
- * que no contenga el término semilla (filtro de ruido barato — ver
- * comentario de arriba) y agrega las preguntas nuevas a "Preguntas" como
- * "Pendiente", etiquetadas con idioma y localización.
+ * Reads seed terms from the "Semillas" tab (columns A:C, from row 2:
+ * Seed term | Languages | Location), queries Google Autocomplete using
+ * each applicable language prefix (all languages by default, or only
+ * those listed in the Languages column), and adds the location when
+ * present. Filters out suggestions that do not match the seed terms and
+ * adds new questions to "Preguntas" as "Pendiente", with language and
+ * location labels.
+ * Entry point: configured to run monthly through a time-driven trigger.
  */
 function investigarPreguntasAutocomplete() {
   const semillas = leerSemillas_();
@@ -77,7 +77,7 @@ function investigarPreguntasAutocomplete() {
 
   const sheet = obtenerOCrearHojaPreguntas_();
   const idiomas = idiomas_();
-  const yaRegistradas = leerPreguntasYaRegistradas_(sheet); // clave: "pregunta en minúsculas|IDIOMA"
+  const yaRegistradas = leerPreguntasYaRegistradas_(sheet); // Key: "lowercase question|LANGUAGE".
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const preguntasNuevas = [];
 
@@ -89,38 +89,36 @@ function investigarPreguntasAutocomplete() {
     const idiomasAplicables = filtrarIdiomas_(semilla.idiomas, idiomas);
     const palabrasSemilla = palabrasClaveSemilla_(semilla.termino);
     idiomasAplicables.forEach(idioma => {
-      let nuevasEnEsteIdioma = 0; // tope por semilla+idioma, cuenta solo lo genuinamente nuevo
+      let nuevasEnEsteIdioma = 0; // Per seed/language limit; count only genuinely new questions.
       let localizacionUsada = semilla.localizacion;
       for (let i = 0; i < idioma.prefijos.length; i++) {
         if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) break;
-        // Límite de 6 min de Apps Script: cortar antes y escribir lo
-        // encontrado hasta acá (si no, un timeout pierde toda la corrida).
+        // Apps Script has a 6-minute limit. Stop early and write the results
+        // collected so far; otherwise a timeout would lose the whole run.
         if (Date.now() - inicio > CONFIG_PREGUNTAS.TIEMPO_MAX_MS) { cortadaPorTiempo = true; break; }
 
         const prefijo = idioma.prefijos[i];
         let sugerencias = consultarAutocomplete_(
           [prefijo, semilla.termino, localizacionUsada].filter(p => p !== '').join(' '), idioma.hl, idioma.gl);
-        // FIX 02/10/2026: con la Localización agregada (ej. "qué es
-        // <término> <ciudad>") el autocompletado casi siempre devuelve
-        // [] -- nadie busca así. Si pasa, se reintenta sin Localización, y
-        // la fila queda con Localización vacía (refleja la consulta real).
-        // Se descarta la Localización para el resto de prefijos de esta
-        // semilla+idioma: si no dio nada, los prefijos más largos tampoco.
+        // FIX 02/10/2026: Autocomplete usually returns [] when a location is
+        // appended (for example, "what is <term> <city>"). Retry without
+        // the location and leave the Location cell blank to reflect the
+        // query that returned results. Drop the location for the remaining
+        // prefixes of this seed/language pair as well.
         if (sugerencias && sugerencias.length === 0 && localizacionUsada !== '') {
           Utilities.sleep(CONFIG_PREGUNTAS.PAUSA_ENTRE_LLAMADAS_MS);
           localizacionUsada = '';
           sugerencias = consultarAutocomplete_(
             [prefijo, semilla.termino].filter(p => p !== '').join(' '), idioma.hl, idioma.gl);
         }
-        // null = la llamada falló (ver consultarAutocomplete_) -- acá no se
-        // distingue de "sin sugerencias", simplemente no aporta nada esta
-        // corrida y se reintenta sola la próxima vez que se corra este Paso.
+        // null means the request failed (see consultarAutocomplete_). This
+        // run skips it; it will be retried the next time this step runs.
         (sugerencias || []).forEach((s, indice) => {
           if (nuevasEnEsteIdioma >= CONFIG_PREGUNTAS.MAX_PREGUNTAS_POR_SEMILLA_E_IDIOMA) return;
           if (!contienePalabrasSemilla_(s, palabrasSemilla)) return;
 
           const clave = s.toLowerCase() + '|' + idioma.codigo;
-          if (yaRegistradas[clave]) return; // ya está en la Hoja (de esta corrida o de una anterior)
+          if (yaRegistradas[clave]) return; // Already in the sheet, from this run or an earlier one.
           yaRegistradas[clave] = true;
 
           nuevasEnEsteIdioma++;
@@ -141,14 +139,14 @@ function investigarPreguntasAutocomplete() {
 }
 
 /**
- * Filtro de ruido (FIX 02/10/2026). Antes exigía la semilla literal como
- * substring de la sugerencia, y descartaba casi todo: Google devuelve
- * "software gestion de mantenimiento" (sin tilde) o "software de gestión
- * de mantenimiento" (palabra intercalada) para la semilla "software
- * gestión de mantenimiento" -- 10 de 10 sugerencias perdidas. Ahora basta
- * con que estén todas las palabras con contenido de la semilla, en
- * cualquier orden, comparando sin tildes ni mayúsculas. Se compara por
- * substring, así "sistemas" también cuenta para "sistema".
+ * Noise filter (FIX 02/10/2026). The old filter required the literal seed
+ * as a substring of a suggestion and discarded nearly all results. For
+ * the seed "software gestión de mantenimiento", Google may return
+ * "software gestion de mantenimiento" (without an accent) or "software
+ * de gestión de mantenimiento" (with an inserted word), causing all ten
+ * suggestions to be lost. Now all meaningful seed words must be present,
+ * in any order, with accents and case ignored. Matching uses substrings,
+ * so "systems" also matches "system".
  */
 const PALABRAS_VACIAS_SEMILLA = [
   'de', 'del', 'la', 'el', 'los', 'las', 'en', 'para', 'por', 'y', 'con', 'un', 'una',
@@ -185,8 +183,8 @@ function leerPreguntasYaRegistradas_(sheet) {
 }
 
 /**
- * "" (vacío en la columna Idiomas) -> todos los de la tabla "Idiomas".
- * "EN" o "EN,DE" -> solo esos, por código (case-insensitive).
+ * Blank in the Languages column means all languages in the "Idiomas" table.
+ * "EN" or "EN,DE" means only those language codes (case-insensitive).
  */
 function filtrarIdiomas_(idiomasTexto, idiomas) {
   if (!idiomasTexto) return idiomas;
@@ -209,12 +207,12 @@ function leerSemillas_() {
 }
 
 /**
- * Devuelve el array de sugerencias (puede ser vacío: consulta real sin
- * resultados), o `null` si la llamada en sí falló (timeout, bloqueo
- * temporal, respuesta no-200) -- quien llama a esta función decide si esa
- * distinción le importa (ver validarPreguntasExistentes en
- * Script6_ValidarPreguntas.gs, donde SÍ importa: ahí un `null` debe
- * reintentarse la próxima corrida, nunca grabarse como "sin demanda real").
+ * Returns the suggestions array (which may be empty when a successful
+ * query has no results), or `null` if the request itself failed (timeout,
+ * temporary block, or non-200 response). The caller decides whether this
+ * distinction matters. It does matter in validarPreguntasExistentes in
+ * Script6_ValidarPreguntas.js: a `null` must be retried on the next run,
+ * never recorded as "no actual demand".
  */
 function consultarAutocomplete_(consulta, hl, gl) {
   const url = 'https://suggestqueries.google.com/complete/search?client=firefox&hl='
@@ -226,27 +224,27 @@ function consultarAutocomplete_(consulta, hl, gl) {
 }
 
 /**
- * Escribe en "Preguntas" las preguntas ya filtradas como nuevas (el
- * dedup contra lo ya registrado se hizo antes, en
- * investigarPreguntasAutocomplete, para que el tope por semilla+idioma
- * cuente solo lo genuinamente nuevo). Nunca toca Estado/Notas de filas
- * existentes — mismo criterio que actualizarSeguimiento_ en Code.js.
+ * Writes the already-filtered new questions to "Preguntas". Deduplication
+ * against existing rows happens earlier in investigarPreguntasAutocomplete
+ * so the per-seed/language limit counts only genuinely new results. This
+ * never changes Status or Notes on existing rows, matching the behavior
+ * of actualizarSeguimiento_ in Code.js.
  *
- * "Posición autocompletado": el índice (1, 2, 3...) en que Google devolvió
- * esa sugerencia para esa consulta — es la única señal de popularidad
- * relativa que da este endpoint (no expone volumen real). Cuanto más
- * bajo el número, más arriba la puso Google.
+ * "Autocomplete position": the index (1, 2, 3, ...) at which Google
+ * returned the suggestion for that query. This endpoint provides no actual
+ * search volume, so this is its only relative popularity signal. A lower
+ * number means Google returned the suggestion earlier.
  *
- * "Volumen mensual (Keyword Surfer)", "Top 10 dominios (Paso 4)", "Fecha
- * evaluación competencia" y "Acción sugerida (competencia)" (12/09/2026):
- * columnas manuales de Paso 3/4 — se dejan vacías aquí, se
- * rellena a mano (ver tareas #93/#94). Absorben lo que antes era la
- * pestaña "Competencia" separada, eliminada por redundante.
+ * "Volumen mensual (Keyword Surfer)", "Top 10 dominios (Paso 4)",
+ * "Fecha evaluación competencia", and "Acción sugerida (competencia)" (12/09/2026):
+ * These are manual Step 3/4 columns. They are left blank here and filled
+ * in by a person (see tasks #93/#94). They replace the separate
+ * "Competencia" tab, which was removed as redundant.
  */
 function escribirPreguntasNuevas_(sheet, preguntasNuevas, fechaStr) {
-  // FIX 02/10/2026: una sola escritura + validaciones una vez para todo el
-  // bloque. Antes iba fila por fila (y cada validación releía "Data"), lo
-  // que con cientos de preguntas nuevas consumía buena parte de los 6 min.
+  // FIX 02/10/2026: write the entire block once and apply validation once.
+  // Previously, rows were written individually and each validation reread
+  // "Data", using much of the 6-minute limit when many questions were new.
   if (preguntasNuevas.length === 0) return;
   const filaInicio = sheet.getLastRow() + 1;
   sheet.getRange(filaInicio, 1, preguntasNuevas.length, 12).setValues(preguntasNuevas.map(p => [

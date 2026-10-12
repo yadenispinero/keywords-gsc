@@ -1,57 +1,62 @@
 /**
- * === VERIFICAR KEYWORDS APLICADAS EN EL SITIO WEB EN VIVO (03/10/2026) ===
- * Parte de evaluarEstados() (Script7): antes de aplicar las reglas, llena
- * la columna COLUMNA_APLICADO_WEB de cada fila con dónde aparece la
- * keyword en el sitio publicado. La regla "Aplicado en web | tiene valor →
- * Aplicado en publicación" de "Reglas de Estado" (Data) convierte eso en
- * Estado. En simularEvaluacionEstados() se calcula igual pero no se escribe.
+ * === VERIFY KEYWORDS ON THE LIVE WEBSITE (03/10/2026) ===
+ * Called by evaluarEstados() in Script7. Before applying the rules, it
+ * fills each row's COLUMNA_APLICADO_WEB with where the keyword appears on
+ * the published site. The "Aplicado en web | has value → Aplicado en
+ * publicación" rule in the Data "Reglas de Estado" table converts this
+ * into a Status. simularEvaluacionEstados() performs the same check without
+ * writing changes.
  *
- * Fuente de verdad = las páginas en vivo, no lo que diga la Hoja:
- *  1. Páginas: el inventario de páginas del sitio (pestaña "Pestaña de
- *     páginas" de la tabla "Verificación web", en la Hoja de la Script
- *     Property PAGINAS_SPREADSHEET_ID o, si falta, BANCO_SPREADSHEET_ID).
- *     Cada fila es una página; cada "Columnas de URL" (ej. "URL EN, URL
- *     DE, URL ES") es su URL en un idioma — los slugs pueden traducirse,
- *     por eso se registran completas y no se arman con un prefijo.
- *  2. De cada URL, los campos de "Dónde buscar": por defecto <meta
- *     name="description"> y el texto visible del <body> (incluye H1/H2; sin
- *     scripts, estilos ni etiquetas). El panel Schlagwörter (meta keywords)
- *     y el <title> solo si se agregan. Odoo ya manda el contenido en el HTML.
- *  3. Keyword y texto normalizados igual: minúsculas, solo letras y
- *     números, y sin tildes salvo que "Ignorar tildes" = No (entonces se
- *     compara como el panel SEO de Odoo).
- *  4. Match por FRASE COMPLETA, como palabras enteras: "consultoria
- *     digital" encuentra "Consultoría digital"; palabras sueltas no
- *     cuentan (evita falsos positivos tipo "field service management
- *     berlin" cuando solo están algunas de esas palabras).
- *  5. Idioma (03/10/2026): con "Solo páginas del mismo idioma" = Sí, una
- *     keyword cuya columna de idioma diga EN solo cuenta en las URLs EN (la
- *     columna "URL EN"), DE en las DE, etc. Sin esto, "E-Learning Plattform"
- *     (keyword EN) coincidía con "E-Learning-Plattform" de la página DE. Una
- *     fila sin idioma (ej. Seguimiento) se busca en todas las páginas.
- *  6. Filas en un Estado protegido (Configuración de Estados, por defecto
- *     Descartada) no se tocan; si aparecen en el sitio, el correo lo avisa.
- *  7. Cada URL se descarga una sola vez por corrida (cache en memoria).
- *  Nota: el guion cuenta como espacio ("ERP-System" = "erp system"), igual
- *  que las tildes no cuentan.
+ * Source of truth: live pages, not spreadsheet values:
+ *  1. Pages come from the site's inventory (the tab configured by
+ *     "Pestaña de páginas" in the "Verificación web" table, in the
+ *     spreadsheet identified by PAGINAS_SPREADSHEET_ID or, if missing,
+ *     BANCO_SPREADSHEET_ID). Each row represents a page. Each configured
+ *     URL column (for example, "URL EN", "URL DE", "URL ES") contains the
+ *     page URL in that language. Slugs may be translated, so full URLs are
+ *     stored rather than built from a prefix.
+ *  2. For each URL, inspect fields listed in "Dónde buscar". By default,
+ *     these are <meta name="description"> and visible <body> text
+ *     (including H1/H2, excluding scripts, styles, and tags). The
+ *     Schlagwörter (meta keywords) panel and <title> are checked only if
+ *     configured. Odoo serves page content in the HTML.
+ *  3. Normalize the keyword and page text the same way: lowercase letters
+ *     and numbers, with accents removed unless "Ignorar tildes" is No. In
+ *     that case, comparison follows Odoo's SEO panel behavior.
+ *  4. Match complete phrases as whole words. "consultoria digital"
+ *     matches "Consultoría digital"; isolated words do not count. This
+ *     avoids false positives such as "field service management berlin"
+ *     when only some words appear.
+ *  5. Language (03/10/2026): when "Solo páginas del mismo idioma" is Yes,
+ *     an EN keyword is matched only against EN URLs (the "URL EN" column),
+ *     DE against DE URLs, and so on. This prevents an EN keyword such as
+ *     "E-Learning Plattform" from matching "E-Learning-Plattform" on a DE
+ *     page. Rows without a language (for example, in Seguimiento) are
+ *     checked against all pages.
+ *  6. Rows in a protected Status (by default, Descartada) are not changed.
+ *     If such a keyword appears on the site, the email reports it.
+ *  7. Each URL is downloaded only once per run (cached in memory).
+ *     Hyphens count as spaces ("ERP-System" = "erp system"), as do
+ *     removed accents.
  *
- * Además:
- *  - Valor de la columna en la hoja de keywords: "<ID página> · <idioma>
- *    [title, keywords, descripción, cuerpo] <url>" de la mejor coincidencia
- *    (prefiere metadatos sobre cuerpo). Si la keyword deja de aparecer en
- *    el sitio, se vacía en la próxima corrida real.
- *  - En la pestaña de páginas, la columna "Columna de keywords aplicadas"
- *    recibe, por página, las keywords investigadas que contiene (con sus
- *    idiomas). Solo en corridas reales.
- *  - El correo avisa de las rutas del sitemap que no están registradas en
- *    la pestaña de páginas (menos "Excluir rutas del aviso"). El sitemap
- *    sale de la propia lista: por cada dominio de las URLs registradas se
- *    lee su robots.txt (líneas "Sitemap:") y, si no indica ninguno, se usa
- *    <dominio>/sitemap.xml. Sin Script Property (03/10/2026).
- *  - Si no se pudo descargar ninguna página (sitio caído), no se toca nada.
+ * Also:
+ *  - The keyword sheet records the best match as "<page ID> · <language>
+ *    [title, keywords, description, body] <url>", preferring metadata
+ *    matches over body matches. If the keyword disappears from the site,
+ *    the value is cleared on the next real run.
+ *  - On the page inventory tab, the "Columna de keywords aplicadas"
+ *    column lists the researched keywords found on each page, with their
+ *    languages. This is written only during real runs.
+ *  - The email reports sitemap paths missing from the page inventory,
+ *    except paths listed in "Excluir rutas del aviso". Sitemap locations
+ *    are discovered from each registered URL domain's robots.txt
+ *    ("Sitemap:" lines); if none is declared, <domain>/sitemap.xml is
+ *    used. No Script Property is required (03/10/2026).
+ *  - If no pages could be downloaded (for example, because the site is
+ *    down), nothing is changed.
  */
 const COLUMNA_APLICADO_WEB = 'Aplicado en web';
-/** Fecha del último cambio de COLUMNA_APLICADO_WEB (03/10/2026): desde ahí se cuenta la espera de medición. */
+/** Date of the last COLUMNA_APLICADO_WEB change (03/10/2026); the measurement wait starts from this date. */
 const COLUMNA_FECHA_CAMBIO_WEB = 'Fecha cambio en web';
 
 const TABLA_VERIFICACION_WEB = {
@@ -65,30 +70,29 @@ const TABLA_VERIFICACION_WEB = {
     ['Excluir rutas del aviso', '/privacy, /terms'],
     ['Columna de idioma de la keyword', 'Idioma'],
     ['Solo páginas del mismo idioma', 'Sí'],
-    // Dónde se busca la frase. Opciones: title, keywords, descripción, cuerpo.
-    // "keywords" (panel Schlagwörter) NO va por defecto: es la lista de
-    // keywords DECLARADAS para la página, no prueba que estén aplicadas — el
-    // propio panel SEO de Odoo marca dónde aparecen (H1/H2/T/D/C) y la
-    // lista no es una de esas columnas (03/10/2026). H1 y H2 forman parte
-    // del cuerpo. "title" = T de Odoo (pestaña del navegador), fuera por
-    // decisión explícita; se puede agregar.
+    // Fields in which to search: title, keywords, description, body.
+    // "keywords" (the Schlagwörter panel) is excluded by default: it lists
+    // keywords declared for the page and does not prove they are applied.
+    // Odoo's SEO panel indicates where a keyword appears (H1/H2/T/D/C), and
+    // that list is not one of those fields (03/10/2026). H1 and H2 are part
+    // of the body. "title" (Odoo's browser-tab T) is intentionally excluded
+    // but can be enabled.
     ['Dónde buscar', 'descripción, cuerpo'],
-    // Sí: "automaticos" coincide con "automáticos" (el algoritmo definido).
-    // No: hay que escribir la keyword con las mismas tildes que la página,
-    // igual que compara el panel SEO de Odoo.
+    // Yes: "automaticos" matches "automáticos" (ignore accents).
+    // No: accents must match the page, as in Odoo's SEO panel.
     ['Ignorar tildes', 'Sí']
   ],
   listas: {}
 };
 
 /**
- * Estado de la verificación durante UNA ejecución: páginas descargadas,
- * keywords encontradas por página y avisos para el correo. null = aún no
- * se cargó; { paginas: null } = no configurada o sin páginas.
+ * Verification state for one run: downloaded pages, keywords found per
+ * page, and email warnings. null means not loaded; { paginas: null }
+ * means verification is not configured or no pages were found.
  */
 let verificacionWeb_ = null;
 
-/** Opciones de la tabla "Verificación web", con los valores por defecto para claves faltantes. */
+/** Options from the "Verificación web" table, with defaults for missing keys. */
 function opcionesVerificacionWeb_() {
   const valores = {};
   TABLA_VERIFICACION_WEB.filas.forEach(([clave, valor]) => { valores[clave] = valor; });
@@ -108,9 +112,9 @@ function opcionesVerificacionWeb_() {
 }
 
 /**
- * Páginas del sitio ya descargadas → { url: { id, idioma, fila, title,
- * keywords, descripcion, cuerpo } }, o null si la verificación no está
- * configurada o no se pudo bajar ninguna página.
+ * Downloaded site pages → { url: { id, idioma, fila, title, keywords,
+ * descripcion, cuerpo } }, or null if verification is not configured or
+ * no page could be downloaded.
  */
 function paginasWeb_() {
   if (verificacionWeb_) return verificacionWeb_.paginas;
@@ -167,9 +171,9 @@ function paginasWeb_() {
 }
 
 /**
- * Rutas de los sitemaps del sitio que no están en la pestaña de páginas →
- * avisos. Los sitemaps salen de los dominios de las URLs registradas: su
- * robots.txt ("Sitemap: ...") o, si no indica ninguno, /sitemap.xml.
+ * Sitemap paths missing from the page inventory become email warnings.
+ * Sitemap locations are discovered from registered URL domains: their
+ * robots.txt ("Sitemap: ...") or /sitemap.xml if none is declared.
  */
 function avisarPaginasSinRegistrar_(destinos, opciones) {
   const ruta = url => (url.replace(/^https?:\/\/[^\/]+/, '').replace(/\/+$/, '') || '/');
@@ -201,17 +205,18 @@ function avisarPaginasSinRegistrar_(destinos, opciones) {
 }
 
 /**
- * Igual que normalizarTexto_ (Script2) pero conservando las tildes: solo
- * minúsculas y letras/números separados por un espacio. Para comparar como
- * el panel SEO de Odoo ("Ignorar tildes" = No).
+ * Like normalizarTexto_ in Script2, but preserves accents. Returns
+ * lowercase letters/numbers separated by spaces. Used to match Odoo's SEO
+ * panel when "Ignorar tildes" is No.
  */
 function normalizarConTildes_(texto) {
   return texto.toString().normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 /**
- * HTML → { title, keywords, descripcion, cuerpo } normalizados sin tildes, y
- * los mismos en `conTildes`. Cada texto rodeado de espacios.
+ * Converts HTML to { title, keywords, descripcion, cuerpo }, normalized
+ * with accents removed, and returns the same fields in `conTildes`.
+ * Each text is padded with spaces.
  */
 function extraerTextosPagina_(html) {
   const meta = nombre => {
@@ -242,11 +247,11 @@ function decodificarEntidades_(texto) {
 }
 
 /**
- * Dónde aparece `keyword` en el sitio: "<ID> · <idioma> [dónde] <url>" de la
- * mejor coincidencia (más hits en metadatos), o '' si no aparece. Con
- * `idioma` (código de la fila, ej. "EN") y "Solo páginas del mismo idioma"
- * = Sí, solo mira las URLs de ese idioma. Si `registrar`, anota la página
- * para escribirla luego en la pestaña de páginas.
+ * Finds where `keyword` appears and returns the best match as
+ * "<ID> · <language> [fields] <url>", preferring metadata, or '' if
+ * absent. If `idioma` is provided (for example, "EN") and "Solo páginas
+ * del mismo idioma" is Yes, only URLs in that language are checked. When
+ * `registrar` is set, records the page for later writing to the inventory.
  */
 function aplicadoEnWeb_(keyword, paginas, idioma, registrar) {
   const opciones = verificacionWeb_.opciones || {};
@@ -280,9 +285,9 @@ function registrarEncontrada_(fila, keyword, idioma) {
 }
 
 /**
- * Escribe en la pestaña de páginas, por página, las keywords encontradas:
- * "keyword (EN, DE); otra (ES)". Crea la columna si falta. Llamar una vez
- * al final de una corrida real, después de evaluar todas las pestañas.
+ * Writes the keywords found on each page to the page inventory tab, for
+ * example, "keyword (EN, DE); another (ES)". Creates the column if needed.
+ * Call once at the end of a real run, after all keyword tabs are evaluated.
  */
 function escribirKeywordsEnPaginas_() {
   if (!verificacionWeb_ || !verificacionWeb_.paginas) return;
@@ -302,13 +307,13 @@ function escribirKeywordsEnPaginas_() {
   hoja.getRange(2, col, valores.length, 1).setValues(valores);
 }
 
-/** Keyword en Estado protegido que aparece en el sitio → aviso en el correo (no se cambia nada). */
+/** A keyword in a protected Status appears on the site → email warning; no data is changed. */
 function avisoProtegidaEnWeb_(hoja, fila, keyword, estado, donde) {
   verificacionWeb_.avisos.push('"' + texto_(keyword) + '" (' + hoja + ' fila ' + fila + ', ' + estado
     + ') aparece en el sitio: ' + donde);
 }
 
-/** Avisos de la verificación web para el correo (páginas que fallaron o sin registrar). */
+/** Web verification warnings for the email (failed or unregistered pages). */
 function avisosVerificacionWeb_() {
   return verificacionWeb_ ? verificacionWeb_.avisos : [];
 }

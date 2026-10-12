@@ -1,29 +1,26 @@
 /**
- * === CONFIGURACIÓN (ajustar por sitio/empresa antes de correr) ===
- * Los parámetros ajustables genéricos (ventana de días, umbrales, nombre
- * de pestaña) viven aquí. El dato que identifica la instalación concreta
- * (la propiedad de Search Console a consultar) NO vive en el código —
- * vive en Script Properties (⚙️ Configuración del proyecto → Script
- * Properties, en el editor de Apps Script) como `SITE_URL`, leído por
- * `siteUrl_()`. Así este archivo queda genérico para cualquier sitio/
- * empresa sin tocar una sola línea al reutilizarlo — solo se configura
- * la propiedad en la instalación de destino.
+ * === CONFIGURATION (adjust for each site/company before running) ===
+ * Generic adjustable settings (date range, thresholds, tab name) live
+ * here. The installation-specific value (the Search Console property)
+ * is stored in Script Properties as `SITE_URL` and read by `siteUrl_()`.
+ * This keeps the file reusable for any site/company without code changes;
+ * configure the property in the target installation instead.
  */
 const CONFIG = {
-  DIAS_ATRAS: 90,               // ventana de datos a traer de la API
-  ROW_LIMIT_API: 1000,          // máximo de filas a pedir a la API (límite de Google: 25000)
-  TOP_N: 30,                    // cuántas keywords quedan en la pestaña del día
+  DIAS_ATRAS: 90,               // Number of days of data to request from the API.
+  ROW_LIMIT_API: 1000,          // Maximum rows requested from the API (Google limit: 25,000).
+  TOP_N: 30,                    // Number of keywords kept in the daily tab.
 
-  UMBRAL_CTR_BAJO: 0.02,        // 2% — bajo esto, "pocos clics" pese a impresiones
-  UMBRAL_IMPRESIONES_ALTAS: 50, // impresiones ≥ esto + CTR bajo = "Oportunidad"
-  UMBRAL_IMPRESIONES_BAJAS: 10, // impresiones ≤ esto = "Casi ausente"
+  UMBRAL_CTR_BAJO: 0.02,        // Below 2% is considered a low CTR despite impressions.
+  UMBRAL_IMPRESIONES_ALTAS: 50, // At least this many impressions plus low CTR = "Oportunidad".
+  UMBRAL_IMPRESIONES_BAJAS: 10, // At most this many impressions = "Casi ausente".
 
   NOMBRE_HOJA_SEGUIMIENTO: 'Seguimiento - trafico Real'
 };
 
 /**
- * Lee un dato de instalación desde Script Properties (⚙️ Configuración del
- * proyecto → Script Properties). Lanza un error claro si falta.
+ * Reads an installation value from Script Properties (Project Settings →
+ * Script Properties). Throws a clear error if it is missing.
  */
 function configDato_(clave) {
   const valor = PropertiesService.getScriptProperties().getProperty(clave);
@@ -35,41 +32,40 @@ function configDato_(clave) {
 }
 
 /**
- * Abre esta Hoja de cálculo por su ID (Script Property `SPREADSHEET_ID`),
- * no con getActiveSpreadsheet() — ver FIX 13/09/2026-B en
- * Script6_ValidarPreguntas.js (puntero interno a una pestaña ya borrada).
+ * Opens this spreadsheet by ID (Script Property `SPREADSHEET_ID`) instead
+ * of using getActiveSpreadsheet(). See FIX 13/09/2026-B in
+ * Script6_ValidarPreguntas.js (a stored pointer referenced a deleted tab).
  */
 function hojaDeCalculo_() {
   return SpreadsheetApp.openById(configDato_('SPREADSHEET_ID'));
 }
 
 /**
- * Correo destino de los resúmenes (Script Property `EMAIL_RESUMEN`).
- * Compartido por publicarPriorizadasEnBancoDeContenido() y evaluarEstados().
+ * Summary email recipient (Script Property `EMAIL_RESUMEN`). Shared by
+ * publicarPriorizadasEnBancoDeContenido() and evaluarEstados().
  */
 function emailResumen_() {
   return configDato_('EMAIL_RESUMEN');
 }
 
 /**
- * Pestañas que llevan columna "Estado" — las que cuentan los resúmenes
- * por correo. Función (no constante) para no depender del orden en que
- * Apps Script carga los archivos.
+ * Tabs with a "Estado" column, included in email summaries. This is a
+ * function rather than a constant so it does not depend on the order in
+ * which Apps Script loads files.
  */
 function hojasConEstado_() {
   return [CONFIG.NOMBRE_HOJA_SEGUIMIENTO, CONFIG_PREGUNTAS.HOJA_PREGUNTAS];
 }
 
 /**
- * Localiza columnas por ENCABEZADO (fila 1), no por posición fija — las
- * pestañas se reordenan a mano seguido (02/10/2026: en Seguimiento
- * "Volumen mensual" pasó delante de "Acción propuesta" y el código, que
- * escribía por posición, iba a poner la fórmula en la columna de Volumen).
- * Devuelve una función `col(nombre)` → número de columna (1-based), o 0 si
- * no existe. Compara sin tildes ni mayúsculas, y si no hay coincidencia
- * exacta acepta un encabezado que EMPIECE por `nombre` — así "Top 10
- * dominios" encuentra tanto "Top 10 dominios" (Preguntas) como "Top 10
- * dominios (Paso 4)" (Seguimiento).
+ * Locates columns by HEADER (row 1), not by fixed position, because tabs
+ * are often manually reordered. On 02/10/2026, "Volumen mensual" was
+ * moved before "Acción propuesta" in Seguimiento; position-based code
+ * would have written a formula into the volume column. Returns a
+ * `col(name)` function giving a 1-based column number, or 0 if absent.
+ * Matching ignores accents and case. If no exact match exists, a header
+ * beginning with `name` is accepted, so "Top 10 dominios" matches both
+ * "Top 10 dominios" (Preguntas) and "Top 10 dominios (Paso 4)" (Seguimiento).
  */
 function columnasPorEncabezado_(sheet) {
   const norm = t => t.toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -84,7 +80,7 @@ function columnasPorEncabezado_(sheet) {
   };
 }
 
-/** Igual que columnasPorEncabezado_, pero lanza un error claro si falta alguna. */
+/** Like columnasPorEncabezado_, but throws a clear error if a required column is missing. */
 function columnasObligatorias_(sheet, nombres) {
   const col = columnasPorEncabezado_(sheet);
   const mapa = {};
@@ -106,12 +102,12 @@ function letraColumna_(numero) {
 }
 
 /**
- * Lee un bloque de la columna A de "Data": los valores que siguen a la
- * celda `encabezado`, hasta la primera vacía. Así las listas de Data se
- * pueden mover de fila sin tocar código (antes el dropdown de competencia
- * leía Data!A13:A14 fijo, y la lista real ya estaba en A15:A16 — el
- * dropdown dejaba de aplicarse sin avisar). Sin `encabezado`, lee el
- * primer bloque (A2 hacia abajo: el catálogo de Estados).
+ * Reads a block in column A of "Data": values after `encabezado`, through
+ * the first blank cell. This lets Data lists move without code changes.
+ * Previously, the competition dropdown read the fixed range Data!A13:A14,
+ * while the actual list had moved to A15:A16, silently disabling the
+ * dropdown. Without `encabezado`, reads the first block (A2 down: the
+ * Status catalog).
  */
 function leerBloqueData_(encabezado) {
   const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
@@ -128,30 +124,29 @@ function leerBloqueData_(encabezado) {
   return bloque;
 }
 
-/** Catálogo de Estados válidos (Data, primer bloque de la columna A). */
+/** Valid Status catalog (Data, first block in column A). */
 function leerEstadosValidos_() {
   return leerBloqueData_();
 }
 
 /**
- * === TABLAS DE CONFIGURACIÓN EN "Data" (03/10/2026) ===
- * Todo lo que una instalación quiere ajustar sin tocar código (reglas de
- * Estado, qué Estados requieren acción, idiomas a investigar...) vive en
- * una tabla de la pestaña "Data". Cada tabla se ubica por su TÍTULO (una
- * celda en cualquier columna), así se puede mover a gusto:
+ * === CONFIGURATION TABLES ON "Data" (03/10/2026) ===
+ * Installation settings that should be adjustable without code changes
+ * (Status rules, which Status values require action, languages to query,
+ * etc.) live in tables on the "Data" tab. Each table is located by its
+ * TITLE (in any column), so it can be moved freely:
  *
  *   <Título>
  *   <encabezado 1> | <encabezado 2> | ...
- *   valor          | valor          | ...   ← filas hasta la primera con la 1ª celda vacía
+ *   value          | value          | ...   ← rows continue until the first blank in column 1
  *
- * `definicion` = { titulo, encabezados, filas }. `filas` son solo los
- * valores con que se crea la tabla si todavía no existe (instalación
- * nueva); desde ahí la fuente de verdad es la Hoja. Las columnas se leen
- * por POSICIÓN y se devuelven con los nombres de `encabezados` — renombrar
- * un encabezado en la Hoja no rompe nada, reordenar columnas sí. Si en
- * una versión nueva la definición suma una columna al final, se le pone el
- * encabezado sola (completarEncabezadosData_) y sus celdas vacías se leen
- * como "sin valor".
+ * `definicion` = { titulo, encabezados, filas }. `filas` supplies initial
+ * defaults only when creating a table for a new installation; afterward,
+ * the spreadsheet is the source of truth. Columns are read by POSITION
+ * and returned using the `encabezados` names: renaming a sheet header is
+ * safe, but reordering columns is not. If a new version adds a column at
+ * the end of a definition, its header is added automatically by
+ * completarEncabezadosData_; blank cells are treated as having no value.
  */
 function leerTablaData_(definicion) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -178,7 +173,7 @@ function leerTablaData_(definicion) {
   return filas;
 }
 
-/** Escribe los encabezados que falten (columnas agregadas al final de una tabla ya existente). */
+/** Adds any missing headers (columns appended to an existing table). */
 function completarEncabezadosData_(dataSheet, celda, definicion) {
   const rango = dataSheet.getRange(celda.getRow() + 1, celda.getColumn(), 1, definicion.encabezados.length);
   const actuales = rango.getValues()[0];
@@ -187,9 +182,9 @@ function completarEncabezadosData_(dataSheet, celda, definicion) {
 }
 
 /**
- * Crea la tabla a la derecha de lo que ya haya en Data (dejando una
- * columna libre), con los valores por defecto. Si `definicion.listas`
- * trae { encabezado: [valores] }, esa columna queda con dropdown.
+ * Creates the table to the right of existing content on Data, leaving one
+ * blank column, and fills it with defaults. If `definicion.listas` includes
+ * { encabezado: [valores] }, that column gets a dropdown.
  */
 function crearTablaData_(dataSheet, definicion) {
   const columna = dataSheet.getLastColumn() + 2;
@@ -210,35 +205,33 @@ function crearTablaData_(dataSheet, definicion) {
   return dataSheet.getRange(1, columna);
 }
 
-/** "Sí" / "si" / "SÍ" / true → true. Para las columnas Sí/No de las tablas de Data. */
+/** Converts "Sí" / "si" / "SÍ" / true to true; used for Yes/No columns in Data tables. */
 function esSi_(valor) {
   return valor === true || /^s[ií]$/i.test(valor.toString().trim());
 }
 
 /**
- * Lee la propiedad de Search Console a consultar desde Script Properties.
- * Debe coincidir EXACTO con la propiedad verificada en Search Console.
- * Dos formatos posibles según cómo esté verificada la propiedad:
- *   - Propiedad de DOMINIO (ícono de globo, ej. "tudominio.de"):
- *     usar 'sc-domain:tudominio.de' (con ese prefijo literal).
- *   - Propiedad de PREFIJO DE URL (ej. "https://www.tudominio.de/"):
- *     usar la URL completa tal cual aparece en Search Console.
- * Nota (12/09/2026): con la URL de prefijo la API daba 403 "User does not
- * have sufficient permission for site" pese a tener acceso de Inhaber,
- * porque el identificador no coincidía con ninguna propiedad real —
- * verificar el formato exacto en el selector de propiedades de Search
- * Console antes de configurar esta propiedad.
+ * Reads the Search Console property from Script Properties. It must match
+ * the verified Search Console property EXACTLY. Two formats are possible:
+ *   - DOMAIN property (globe icon, e.g. "example.de"): use
+ *     'sc-domain:example.de' with that literal prefix.
+ *   - URL PREFIX property (e.g. "https://www.example.de/"): use the full
+ *     URL exactly as shown in Search Console.
+ * Note (12/09/2026): the URL-prefix form returned 403 "User does not have
+ * sufficient permission for site" despite owner access because the
+ * identifier did not match an actual property. Check the exact format in
+ * Search Console's property selector before configuring this value.
  */
 function siteUrl_() {
   return configDato_('SITE_URL');
 }
 
 /**
- * Trae las consultas de los últimos CONFIG.DIAS_ATRAS días desde la Search
- * Console API, las clasifica, escribe el top CONFIG.TOP_N en una pestaña
- * nueva con la fecha del día, y sincroniza la pestaña de Seguimiento
- * (agrega keywords nuevas como "Pendiente", sin tocar las que ya se estén
- * trabajando).
+ * Fetches queries from the last CONFIG.DIAS_ATRAS days through the Search
+ * Console API, classifies them, writes up to CONFIG.TOP_N results to a new
+ * date-stamped tab, and updates the Seguimiento tab. New keywords are added
+ * as "Pendiente"; existing work statuses and notes are preserved.
+ * Entry point: configured to run monthly through a time-driven trigger.
  */
 function exportarKeywordsGSC() {
   const hoy = new Date();
@@ -285,11 +278,11 @@ function exportarKeywordsGSC() {
 }
 
 /**
- * Llama la Search Console API directamente por REST (UrlFetchApp + token
- * OAuth del script), en vez de depender del servicio avanzado "Search
- * Console API"/"Webmasters API" del editor de Apps Script — Google lo ha
- * ido recortando de esa lista y ya no aparece de forma consistente. Solo
- * requiere el scope `webmasters.readonly` en appsscript.json.
+ * Calls the Search Console API directly over REST (UrlFetchApp plus the
+ * script's OAuth token) instead of relying on the Apps Script editor's
+ * advanced "Search Console API"/"Webmasters API" service, which Google no
+ * longer lists consistently. Only the `webmasters.readonly` scope in
+ * appsscript.json is required.
  */
 function consultarSearchConsole_(request) {
   const url = 'https://www.googleapis.com/webmasters/v3/sites/'
@@ -331,22 +324,21 @@ function escribirPestañaDelDia_(priorizadas, fechaStr) {
 }
 
 /**
- * FIX 12/09/2026: la posición se escribía como texto ("2.2", "9.9"...) y
- * en una Hoja con configuración regional alemana (fechas día.mes), Sheets
- * autoconvertía esos textos en fechas (ej. "2.2" → 2 de febrero) — solo
- * se salvaban los que no forman una fecha válida (ej. "52.6", mes 52 no
- * existe). Escribir un número real + forzar formato '0.0' evita que
- * Sheets vuelva a adivinar el tipo de dato.
+ * FIX 12/09/2026: position values were written as text ("2.2", "9.9", ...).
+ * In a spreadsheet using the German locale (day.month dates), Sheets
+ * auto-converted these strings to dates (e.g. "2.2" → February 2), and
+ * only values that could not be valid dates (e.g. "52.6") survived.
+ * Writing a number and forcing the '0.0' format prevents Sheets from
+ * guessing the data type.
  */
 function redondearPosicion_(position) {
   return Math.round(position * 10) / 10;
 }
 
 /**
- * Encabezados de Seguimiento, en el orden con que se crea la pestaña desde
- * cero. Una vez creada, el orden real lo decide la persona que la usa —
- * el código ubica cada columna por su encabezado (columnasPorEncabezado_),
- * nunca por posición.
+ * Seguimiento headers, in the order used when creating the tab from
+ * scratch. After creation, users control the actual order; code locates
+ * every column by its header (columnasPorEncabezado_), never by position.
  */
 const COLUMNAS_SEGUIMIENTO = [
   'Keyword', 'Categoría', 'Impresiones', 'CTR', 'Posición', 'Volumen mensual (Keyword Surfer)',
@@ -355,23 +347,22 @@ const COLUMNAS_SEGUIMIENTO = [
 ];
 
 /**
- * Seguimiento absorbió lo que era la pestaña "Competencia" (12/09/2026 —
- * era redundante). Acción propuesta y Notas son fórmulas que se
- * recalculan solas — el script nunca las toca en filas existentes. Notas
- * arranca con la Description de esa Acción propuesta (VLOOKUP contra
- * Data!A:B); si se escribe texto a mano encima, esa celda puntual deja de
- * ser fórmula y queda su nota manual. Volumen mensual, Top 10 dominios,
- * Fecha evaluación competencia y Acción sugerida son manuales (Paso 3/4);
- * Estado lo ajusta evaluarEstados() (Script7_EvaluarEstados.js) o a mano.
- * Si la keyword ya existe, solo se refrescan las columnas de datos de GSC
- * (Categoría, Impresiones, CTR, Posición, Última actualización) — nunca
- * se pisa el trabajo manual de Paso 3/4.
+ * Seguimiento absorbed the former "Competencia" tab (12/09/2026), which
+ * was redundant. "Acción propuesta" and "Notas" are formulas that recalc
+ * automatically; this script never changes them on existing rows. Notes
+ * starts with the Description for the proposed action (VLOOKUP against
+ * Data!A:B). If manually overwritten, that cell remains a manual note.
+ * Monthly volume, top 10 domains, competition review date, and suggested
+ * action are completed manually (Steps 3/4). evaluarEstados() in
+ * Script7_EvaluarEstados.js or a person updates Status. For an existing
+ * keyword, only GSC data columns (Category, Impressions, CTR, Position,
+ * Last update) are refreshed; manual Step 3/4 work is preserved.
  *
- * FIX 03/10/2026: escribía por posición fija (14 columnas en orden). La
- * pestaña real ya tenía "Volumen mensual" delante de "Acción propuesta",
- * así que cada keyword nueva habría quedado con la fórmula en la columna
- * de Volumen y Notas apuntando a la columna equivocada. Ahora cada valor
- * va a la columna con su encabezado.
+ * FIX 03/10/2026: values used to be written by fixed position (14 columns
+ * in order). The live tab had already moved "Volumen mensual" before
+ * "Acción propuesta", so new keywords would have received the formula in
+ * the volume column and Notes would have referenced the wrong column.
+ * Values are now written to the column matching each header.
  */
 function actualizarSeguimiento_(priorizadas, fechaStr) {
   const sheet = obtenerOCrearHojaSeguimiento_();
@@ -422,30 +413,27 @@ function actualizarSeguimiento_(priorizadas, fechaStr) {
 }
 
 /**
- * Fórmula de "Acción propuesta": evalúa, en orden de prioridad, las 5
- * reglas de Data!D2:J6 (Posición mín/máx, CTR máx, Impresiones mín/máx →
- * Acción propuesta) contra Posición/CTR/Impresiones de la misma fila.
- * Tanto los umbrales como el texto de salida se leen en vivo de esas
- * celdas — cambiar un número o el texto de una acción en Data se refleja
- * solo, sin tocar código ni las filas ya escritas. La ESTRUCTURA de qué
- * campos importan en cada regla sí está fija en la fórmula (rediseñar
- * eso si hace falta sí requiere tocar este código). No reemplaza el
- * juicio manual — casos especiales (typos de marca, keywords ya
- * cubiertas, candidatas de schema, etc.) se documentan a mano en Notas y
- * se marcan en Estado.
+ * "Acción propuesta" formula: evaluates the five rules in Data!D2:J6 in
+ * priority order (minimum/maximum position, maximum CTR, minimum/maximum
+ * impressions → proposed action) against the row's Position/CTR/Impressions.
+ * Thresholds and output text are read live from those cells, so changing a
+ * value or action in Data applies automatically without code changes or
+ * rewriting existing rows. The STRUCTURE of which fields each rule uses
+ * remains fixed in the formula and requires code changes to redesign.
+ * This does not replace human judgment: special cases (brand typos,
+ * keywords already covered, schema candidates, etc.) should be noted in
+ * Notes and reflected in Status.
  */
 function formulaAccionPropuesta_(fila, letras) {
-  // Separador de argumentos ";" (no ","): la Hoja está en configuración
-  // regional alemana, donde "," es el separador decimal y ";" separa
-  // argumentos de función — con "," las fórmulas daban "Fehler beim
-  // Parsen der Formel" (12/09/2026).
-  // CTR se referencia directo (D<fila>), SIN VALUE(): antes se escribía
-  // como texto ("0.00%", con punto decimal) y VALUE() en un Sheet con
-  // configuración regional alemana espera coma decimal ("0,00%") — fallaba
-  // silenciosamente, el error caía en el IFERROR de afuera y la fórmula
-  // siempre daba vacío. Ahora CTR se guarda como número real (ver
-  // actualizarSeguimiento_/escribirPestañaDelDia_), no hace falta parsear.
-  // Letras de columna calculadas por encabezado (ver actualizarSeguimiento_).
+  // Use ";" rather than "," as the argument separator. In the German
+  // locale, comma is the decimal separator and semicolon separates
+  // function arguments; comma caused a formula parse error (12/09/2026).
+  // Reference CTR directly (D<row>), without VALUE(). It used to be stored
+  // as text ("0.00%"), while VALUE() in the German locale expects a comma
+  // decimal ("0,00%"). The conversion failed silently and IFERROR returned
+  // a blank result. CTR is now stored as a number (see
+  // actualizarSeguimiento_/escribirPestañaDelDia_), so parsing is not needed.
+  // Column letters are calculated from headers (see actualizarSeguimiento_).
   const P = letras.posicion + fila, D = letras.ctr + fila, I = letras.impresiones + fila;
   return '=IFERROR(IFS('
     + 'AND(' + P + '<=Data!$F$2;' + D + '<=Data!$G$2/100;' + I + '>=Data!$H$2);Data!$J$2;'
@@ -458,22 +446,22 @@ function formulaAccionPropuesta_(fila, letras) {
 }
 
 /**
- * Fórmula de "Notas": carga sola la Description de Data!A:B que
- * corresponde a la Acción propuesta (columna `letraAccion`) de la misma fila — mismo
- * vocabulario controlado que el dropdown de Estado, sin duplicar texto.
- * Separador ";" por el locale alemán de la Hoja (ver formulaAccionPropuesta_).
+ * "Notas" formula: looks up the Description in Data!A:B for the proposed
+ * action in the same row (column `letraAccion`). This uses the same
+ * controlled vocabulary as the Status dropdown without duplicating text.
+ * Uses ";" as the argument separator for the spreadsheet's German locale
+ * (see formulaAccionPropuesta_).
  */
 function formulaNotas_(fila, letraAccion) {
   return '=IFERROR(VLOOKUP(' + letraAccion + fila + ';Data!A:B;2;FALSE);"")';
 }
 
 /**
- * Crea (si no existe) las dos tablas de Data que usa el script: Estados
- * (A:B, para el dropdown de Estado) y Reglas de Acción propuesta (D:J,
- * para la fórmula de arriba). Idempotente — si ya se armaron a
- * mano (o las trae de una corrida anterior), no las toca. Sirve para que
- * el script quede autocontenido al reutilizarlo en un sitio/empresa
- * nueva sin tener que armar las tablas de Data a mano desde cero.
+ * Creates the two Data tables used by this script if they do not exist:
+ * Statuses (A:B, for the Status dropdown) and Proposed Action Rules
+ * (D:J, for the formula above). It is idempotent: if the tables already
+ * exist (created manually or by an earlier run), it leaves them alone.
+ * This makes the script self-contained when reused for a new site/company.
  */
 function asegurarReglasAccionEnData_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -525,21 +513,19 @@ function asegurarReglasAccionEnData_() {
 }
 
 /**
- * Aplica el dropdown de Estado (columna `columna`) validado contra la
- * lista de la pestaña "Data" (columna A, desde la fila 2). Compartida
- * entre Seguimiento y Preguntas — mismo vocabulario de Estados en toda la
- * Hoja.
- * setAllowInvalid(true): si la celda ya tuviera algo que no calza con la
- * lista, solo lo marca visualmente (triángulo de advertencia) en vez de
- * romper el script. Si la pestaña "Data" no existe todavía, no falla —
- * no aplica validación.
+ * Applies a Status dropdown to column `columna`, validated against the
+ * list on the Data tab (column A from row 2). Shared by Seguimiento and
+ * Preguntas to keep Status values consistent across the spreadsheet.
+ * setAllowInvalid(true) marks an existing value outside the list with a
+ * warning triangle instead of failing the script. If Data does not exist,
+ * no validation is applied and no error is thrown.
  */
 function aplicarValidacionEstado_(sheet, filaInicio, numFilas, columna) {
   if (numFilas === 0 || !columna) return;
   const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
   if (!dataSheet) return;
-  // Solo el primer bloque de A (el catálogo): contar todo A2:A metía en la
-  // cuenta la lista de Acción sugerida que está más abajo en la misma columna.
+  // Count only the first block in column A (the catalog); scanning all of
+  // A2:A would include the Suggested Action list farther down the column.
   const numEstados = leerEstadosValidos_().length;
   if (numEstados === 0) return;
   const rule = SpreadsheetApp.newDataValidation()
@@ -549,16 +535,16 @@ function aplicarValidacionEstado_(sheet, filaInicio, numFilas, columna) {
   sheet.getRange(filaInicio, columna, numFilas, 1).setDataValidation(rule);
 }
 
-/** Encabezado, en Data columna A, de la lista de Acción sugerida (competencia). */
+/** Header in Data column A for the competition Suggested Action list. */
 const ENCABEZADO_ACCIONES_COMPETENCIA = 'Estado evaluacion de competencia';
 
 /**
- * Dropdown de "Acción sugerida (competencia)" — validado contra la lista
- * corta de Data que sigue al encabezado ENCABEZADO_ACCIONES_COMPETENCIA
- * ("competir de frente" / "buscar long-tail"), distinta del dropdown
- * general de Estado. FIX 03/10/2026: antes leía Data!A13:A14 fijo y la
- * lista ya estaba en A15:A16 — el dropdown no se aplicaba. Si la lista no
- * existe, no falla — solo no aplica validación.
+ * "Acción sugerida (competencia)" dropdown, validated against the short
+ * list in Data below ENCABEZADO_ACCIONES_COMPETENCIA ("competir de frente" /
+ * "buscar long-tail"). This differs from the general Status dropdown.
+ * FIX 03/10/2026: it used to read fixed range Data!A13:A14 after the list
+ * had moved to A15:A16, so the dropdown was not applied. If the list is
+ * absent, no validation is applied and no error is thrown.
  */
 function aplicarValidacionAccionCompetencia_(sheet, filaInicio, numFilas, columna) {
   if (numFilas === 0 || !columna) return;
@@ -587,9 +573,9 @@ function obtenerOCrearHojaSeguimiento_() {
 }
 
 /**
- * Cuenta filas por Estado en cada pestaña de `nombresHojas` → { hoja:
- * { estado: n } }. Columna "Estado" localizada por encabezado. Una pestaña
- * que no existe o no tiene columna Estado queda fuera sin error.
+ * Counts rows by Status on each tab in `nombresHojas` → { tab: { status: n } }.
+ * Locates the "Estado" column by header. Missing tabs or tabs without that
+ * column are skipped without error.
  */
 function contarPorEstado_(nombresHojas) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -608,7 +594,7 @@ function contarPorEstado_(nombresHojas) {
   return conteos;
 }
 
-/** Suma los conteos por pestaña de contarPorEstado_ en un solo total por Estado. */
+/** Combines per-tab counts from contarPorEstado_ into one total per Status. */
 function sumarConteos_(conteosPorHoja) {
   const totales = {};
   Object.keys(conteosPorHoja).forEach(hoja => {
@@ -620,8 +606,8 @@ function sumarConteos_(conteosPorHoja) {
 }
 
 /**
- * Description de cada Estado (catálogo de Data: Estado en A, Description
- * en B, desde la fila 2 hasta la primera vacía) → { estado: description }.
+ * Description for each Status (Data catalog: Status in column A,
+ * Description in B, from row 2 to the first blank) → { status: description }.
  */
 function descripcionesEstados_() {
   const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
@@ -635,9 +621,9 @@ function descripcionesEstados_() {
 }
 
 /**
- * Filas de una pestaña con su Estado → [{ fila, etiqueta, estado }].
- * `etiqueta` = valor de la primera columna (Keyword / Pregunta). Para
- * listar filas de muestra en los correos.
+ * Rows on a tab with their Status → [{ row, label, status }]. `etiqueta`
+ * is the first-column value (Keyword / Pregunta), used for sample rows in
+ * summary emails.
  */
 function filasConEstado_(sheet) {
   const colEstado = columnasPorEncabezado_(sheet)('Estado');
@@ -648,10 +634,10 @@ function filasConEstado_(sheet) {
 }
 
 /**
- * Envía un correo a EMAIL_RESUMEN. Si existe la Script Property opcional
- * `NOMBRE_INSTALACION`, el asunto va precedido de "[<nombre>] " — para
- * distinguir los correos cuando varias entidades usan este mismo código.
- * `html` opcional; `texto` es la versión plana (clientes sin HTML).
+ * Sends an email to EMAIL_RESUMEN. If the optional `NOMBRE_INSTALACION`
+ * Script Property exists, prefixes the subject with "[<name>] " to
+ * distinguish messages when multiple entities use this code. `html` is
+ * optional; `texto` is the plain-text version for clients without HTML.
  */
 function enviarCorreo_(asunto, texto, html) {
   const nombre = PropertiesService.getScriptProperties().getProperty('NOMBRE_INSTALACION');
@@ -669,7 +655,7 @@ function escaparHtml_(texto) {
   return texto.toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Enlace a una pestaña (y opcionalmente a una fila) de esta Hoja de cálculo. */
+/** Link to a tab (and optionally a row) in this spreadsheet. */
 function urlPestana_(sheet, fila) {
   return sheet.getParent().getUrl() + '#gid=' + sheet.getSheetId() + (fila ? '&range=A' + fila : '');
 }
