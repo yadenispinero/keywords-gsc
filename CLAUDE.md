@@ -83,13 +83,11 @@ editor de Apps Script, de **cada** proyecto (`keywords-gsc` y el que use
   etc.). FIX 13/09/2026: `getActiveSpreadsheet()` tiró "Sheet <id> not
   found" porque Google guardaba un puntero interno a una pestaña
   "Preguntas" vieja ya borrada; `openById()` evita depender de ese
-  puntero. Valor real (instalación actual):
-  `12n8DVcR7MlnfyND81xMv5RmML4QkOicPGyj12Bi888Q`.
+  puntero. El valor real se configura solo en Script Properties.
 - `BANCO_SPREADSHEET_ID`, `BANCO_HOJA` (obligatorias para
   `publicarPriorizadasEnBancoDeContenido()`, 03/10/2026 — antes fijas en
   `CONFIG_BANCO`) — Hoja de cálculo y pestaña del banco de contenido.
-  Valores de la instalación actual: `1vFLUuk3X0p_ldBnSuD1gs0zjTFaw6xPIidMcWXW8cJ0`
-  y `Consultoria`.
+  Ejemplo: `<ID de la Hoja del banco>` y `Consultoria`.
 - `PAGINAS_SPREADSHEET_ID` (opcional) — Hoja con la pestaña de páginas
   del sitio. Si falta, se usa `BANCO_SPREADSHEET_ID`, porque hoy
   `Paginas_Sitio` vive en la misma Hoja que el banco.
