@@ -127,3 +127,11 @@ con lo agregado y el total de filas por Estado combinando "Seguimiento" +
    automatizar Pasos 3/4 (la cadena de autenticación de Ads ya se probó
    funcionando, solo haría falta reescribir `Script3_KeywordPlanner.js`
    desde el historial de git).
+
+## Process model and automation plan
+
+The current BPMN model of this process, "Investigar y gestionar keywords",
+and the single automation plan for all promotion processes live in the
+local process optimization folder (*Optimizacion procesos*): its `README.md`
+and the `.bpmn` files exported from ADONIS. That model is more complete than
+`keywords-gsc-adonis.bpmn` in this repo, which is an older version.
